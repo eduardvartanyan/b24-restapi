@@ -3,7 +3,6 @@ declare(strict_types=1);
 
 use App\Http\Controllers\ImportController;
 use App\Http\Middleware;
-use App\Services\B24Service;
 use App\Support\Container;
 
 require_once __DIR__ . '/../vendor/autoload.php';
