@@ -25,14 +25,6 @@ try {
             break;
 
         case '/test':
-            $b24Service = $container->get(B24Service::class);
-            $b24Service->importBirthdate([
-                [
-                    'name' => 'ВАРТАНЯН ЭДУАРД',
-                    'phone' => '+79027611122',
-                    'birthdate' => '23.07.1989'
-                ],
-            ]);
     }
 } catch (ReflectionException $e) {
     echo $e->getMessage();
