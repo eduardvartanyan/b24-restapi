@@ -4,12 +4,10 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Services\B24Service;
-use Bitrix24\SDK\Core\Exceptions\BaseException;
-use Bitrix24\SDK\Core\Exceptions\TransportException;
 
-class ImportController
+readonly class ImportController
 {
-    public function __construct(private readonly B24Service $b24Service) {}
+    public function __construct(private B24Service $b24Service) {}
 
     private function json(mixed $data, int $status = 200, array $headers = []): void
     {
@@ -23,10 +21,6 @@ class ImportController
         echo json_encode($data, JSON_UNESCAPED_UNICODE);
     }
 
-    /**
-     * @throws TransportException
-     * @throws BaseException
-     */
     public function importBirthdate(): void
     {
         $raw = file_get_contents('php://input') ?: '{}';
