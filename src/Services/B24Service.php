@@ -4,10 +4,8 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Helpers\Logger;
-use Bitrix24\SDK\Core\Exceptions\BaseException;
-use Bitrix24\SDK\Core\Exceptions\TransportException;
 use Bitrix24\SDK\Services\ServiceBuilder;
-use Psr\Log\LoggerTrait;
+use Throwable;
 
 class B24Service
 {
@@ -24,13 +22,32 @@ class B24Service
         $this->updateBirthdate($contactIds);
     }
 
+    public function addDeal(array $fields): ?int
+    {
+        try {
+            $result = $this->b24->getCRMScope()->deal()->add($fields);
+
+            return $result->getId();
+        } catch (Throwable $e) {
+            Logger::error('Ошибка при добавлении сделки', [
+                'file'    => $e->getFile(),
+                'line'    => $e->getLine(),
+                'message' => $e->getMessage(),
+                'data'    => $fields
+            ]);
+        }
+
+        return null;
+    }
+
     private function getContactIds(): array
     {
         $contactIds = [];
-        try {
-            foreach ($this->data as $item) {
-                if ($item['name'] == '' || $item['phone'] == '') { continue; }
 
+        foreach ($this->data as $item) {
+            if ($item['name'] == '' || $item['phone'] == '') { continue; }
+
+            try {
                 $contactResult = $this->b24->getCRMScope()->contact()->list(
                     [],
                     [
@@ -45,15 +62,17 @@ class B24Service
                 foreach ($contacts as $contact) {
                     $contactIds[$contact->ID] = $item['birthdate'];
                 }
+            } catch (Throwable $e) {
+                Logger::error('Ошибка при получении ID контакта', [
+                    'file'    => $e->getFile(),
+                    'line'    => $e->getLine(),
+                    'message' => $e->getMessage(),
+                    'data'    => $item
+                ]);
             }
-        } catch (BaseException|TransportException $e) {
-            Logger::error($e->getMessage(), [
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-            ]);
         }
 
-        Logger::info('Получен массив с ID контактов', $contactIds);
+        Logger::info('Получен массив с ID контактов', ['count' => count($contactIds)]);
 
         return $contactIds;
     }
@@ -63,14 +82,16 @@ class B24Service
         try {
             foreach ($contactIds as $contactId => $birthdate) {
                 $this->b24->getCRMScope()->contact()->update($contactId, [
-                    'BIRTHDATE' => $birthdate,
+                    'BIRTHDATE'            => $birthdate,
                     'UF_CRM_1657085677401' => $birthdate, // Еще какое-то день рождения
                 ]);
             }
-        } catch (BaseException|TransportException $e) {
-            Logger::error($e->getMessage(), [
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
+        } catch (Throwable $e) {
+            Logger::error('Ошибка при обновлении дней рождений', [
+                'file'    => $e->getFile(),
+                'line'    => $e->getLine(),
+                'message' => $e->getMessage(),
+                'data'    => $contactIds
             ]);
         }
     }
