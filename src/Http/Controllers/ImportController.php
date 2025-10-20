@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Helpers\Logger;
 use App\Services\B24Service;
 
 readonly class ImportController
@@ -24,6 +25,9 @@ readonly class ImportController
     public function importBirthdate(): void
     {
         $raw = file_get_contents('php://input') ?: '{}';
+
+        Logger::info('Сырые данные', ['input' => $raw]);
+
         $data = json_decode($raw, true) ?? [];
 
         if (!$data) {
@@ -31,7 +35,7 @@ readonly class ImportController
             return;
         }
 
-        $this->b24Service->importBirthdate($data);
+        $this->b24Service->importBirthdate($data['data']);
         $this->json(['success' => 'Данные успешно импортированы']);
     }
 }

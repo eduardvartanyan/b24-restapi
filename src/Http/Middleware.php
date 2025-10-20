@@ -3,11 +3,16 @@ declare(strict_types=1);
 
 namespace App\Http;
 
+use App\Helpers\Logger;
+
 class Middleware
 {
     static public function check(): void
     {
         $headers = getallheaders();
+
+        Logger::info('Заголовки запроса', ['headers' => $headers]);
+
         if (!isset($headers['Token'])) {
             http_response_code(401);
             echo json_encode(['error' => 'Осутствует токен'], JSON_UNESCAPED_UNICODE);

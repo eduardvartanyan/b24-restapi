@@ -16,11 +16,7 @@ class Logger
             : '';
 
         $logMessage = "[{$time}] {$level}: {$message} {$contextString}\n";
-
-        echo $filePath . PHP_EOL;
-
-        $result = file_put_contents($filePath, $logMessage, FILE_APPEND);
-        var_dump($result);
+        file_put_contents($filePath, $logMessage, FILE_APPEND);
     }
 
     public static function info(string $message, array $context = []): void

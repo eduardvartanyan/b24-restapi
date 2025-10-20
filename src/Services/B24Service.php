@@ -45,7 +45,7 @@ class B24Service
         $contactIds = [];
 
         foreach ($this->data as $item) {
-            if ($item['name'] == '' || $item['phone'] == '') { continue; }
+            if ($item['name'] == '' || $item['phone'] == '' || $item['birthdate'] == '') { continue; }
 
             try {
                 $contactResult = $this->b24->getCRMScope()->contact()->list(
