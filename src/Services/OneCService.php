@@ -16,15 +16,21 @@ class OneCService
         $this->apiKey = $_ENV['ONEC_API_KEY'];
     }
 
-    public function fetchAccidents(): array
+    public function fetchAccidents(string $dateFrom = ''): array
     {
-        Logger::info('Запрос данных ДТП из 1С', ['uri' => $_SERVER['REQUEST_URI']]);
+        Logger::info('Запрос данных ДТП из 1С');
 
-        $curl = curl_init("{$this->apiUrl}/accidents");
+        if (empty($dateFrom)) {
+            $dateFrom = date('YmdHis', strtotime('-2 days'));
+        } else {
+            $dateFrom = date('YmdHis', strtotime($dateFrom));
+        }
+
+        $curl = curl_init("{$this->apiUrl}/dtp/$dateFrom");
         curl_setopt_array($curl, [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_HTTPHEADER => [
-                "Authorization: Bearer {$this->apiKey}",
+                "Authorization: Basic {$this->apiKey}",
                 "Accept: application/json",
             ],
             CURLOPT_TIMEOUT => 60,
@@ -33,6 +39,8 @@ class OneCService
         $response = curl_exec($curl);
         $error = curl_error($curl);
         curl_close($curl);
+
+        Logger::info("Сырые данные", ['data' => $response]);
 
         if ($error) {
             throw new \RuntimeException("Ошибка CURL при обращении к 1С: $error");

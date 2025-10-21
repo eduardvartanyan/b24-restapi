@@ -4,6 +4,8 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Helpers\Logger;
+use Bitrix24\SDK\Core\Exceptions\BaseException;
+use Bitrix24\SDK\Core\Exceptions\TransportException;
 use Bitrix24\SDK\Services\ServiceBuilder;
 use Throwable;
 
@@ -30,6 +32,26 @@ class B24Service
             return $result->getId();
         } catch (Throwable $e) {
             Logger::error('Ошибка при добавлении сделки', [
+                'file'    => $e->getFile(),
+                'line'    => $e->getLine(),
+                'message' => $e->getMessage(),
+                'data'    => $fields
+            ]);
+        }
+
+        return null;
+    }
+
+    public function dealIsExist(array $fields): ?int
+    {
+        try {
+            $deals = $this->b24->getCRMScope()->deal()->list([], $fields, ['ID']);
+            $result = $deals->getCoreResponse()->getResponseData()->getResult();
+            if (count($result) > 0) {
+                return $result[0]['ID'];
+            }
+        } catch (Throwable $e) {
+            Logger::error('Ошибка при проверке сделки', [
                 'file'    => $e->getFile(),
                 'line'    => $e->getLine(),
                 'message' => $e->getMessage(),

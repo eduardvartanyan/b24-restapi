@@ -13,16 +13,27 @@ readonly class DailyImportService
         private OneCService $oneCService
     ) { }
 
-    public function run(): void
+    public function run(string $dateFrom = ''): void
     {
-        $accidents = $this->oneCService->fetchAccidents();
+        Logger::info('--- Ежедневный импорт ДТП начат ---');
+
+        $accidents = $this->oneCService->fetchAccidents($dateFrom);
 
         foreach ($accidents as $accident) {
             try {
-                $dealId = $this->b24Service->addDeal([
+                $dealId = $this->b24Service->dealIsExist([
+                    'UF_CRM_1561010424'    => $accident['contract_number'],
+                    'UF_CRM_1574325151082' => $accident['driver_phone']
+                ]);
+                if ($dealId > 0) {
+                    Logger::info("Сделка уже существует — $dealId", ['accident' => $accident]);
+                    continue;
+                }
+
+                $fields = [
                     'CATEGORY_ID'          => 12, // 12 - Выплата по ОСАГО
                     'STAGE_ID'             => 'C12:NEW', // C12:NEW - Выгружена
-                    'UF_CRM_1636471851086' => $accident['contract_number'] ?? '',
+                    'UF_CRM_1561010424'    => $accident['contract_number'] ?? '',
                     'UF_CRM_1574325138229' => $accident['driver'] ?? '',
                     'UF_CRM_1574325151082' => $accident['driver_phone'] ?? '',
                     'UF_CRM_1510309410'    => $accident['car'] ?? '',
@@ -31,9 +42,12 @@ readonly class DailyImportService
                     'UF_CRM_1561010437'    => $accident['owner'] ?? '',
                     'UF_CRM_1645478185'    => $accident['address'] ?? '',
                     'UF_CRM_1517203914'    => $accident['date'] ?? '',
-                ]);
+                    'UF_CRM_1638130115'    => '1',
+                ];
 
-                Logger::info("Создана сделка $dealId", ['data' => $accident]);
+                $dealId = $this->b24Service->addDeal($fields);
+
+                Logger::info("Создана сделка $dealId", ['fields' => $fields]);
             } catch (Throwable $e) {
                 Logger::error('Ошибка при добавлении ДТП', [
                     'file'    => $e->getFile(),
@@ -43,5 +57,7 @@ readonly class DailyImportService
                 ]);
             }
         }
+
+        Logger::info('--- Импорт ДТП завершён успешно ---');
     }
 }
