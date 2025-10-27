@@ -38,7 +38,7 @@ readonly class DailyImportService
                     'UF_CRM_1574325151082' => $accident['driver_phone'] ?? '',
                     'UF_CRM_1510309410'    => $accident['car'] ?? '',
                     'UF_CRM_1510894280'    => $accident['car_number'] ?? '',
-                    'UF_CRM_1558627536'    => $accident['issue_year'] ?? '',
+                    'UF_CRM_1558627536'    => (int) str_replace(' ', '', $accident['issue_year']) ?? 0,
                     'UF_CRM_1561010437'    => $accident['owner'] ?? '',
                     'UF_CRM_1645478185'    => $accident['address'] ?? '',
                     'UF_CRM_1517203914'    => $accident['date'] ?? '',
