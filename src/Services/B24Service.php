@@ -48,7 +48,7 @@ class B24Service
             $deals = $this->b24->getCRMScope()->deal()->list([], $fields, ['ID']);
             $result = $deals->getCoreResponse()->getResponseData()->getResult();
             if (count($result) > 0) {
-                return $result[0]['ID'];
+                return (int) $result[0]['ID'];
             }
         } catch (Throwable $e) {
             Logger::error('Ошибка при проверке сделки', [
