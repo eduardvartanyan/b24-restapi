@@ -22,7 +22,7 @@
                 </div>
                 <div class="rating">
                     <?php for ($i = 1; $i <= 10; $i++): ?>
-                        <label>
+                        <label class="rating-item rating-item-<?= $i ?>">
                             <input type="radio"
                                    name="rating[<?= htmlspecialchars($question['ID']) ?>]"
                                    value="<?= $i ?>"
