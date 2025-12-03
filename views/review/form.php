@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Оставить отзыв</title>
-    <link rel="stylesheet" href="../css/review.css">
+    <link rel="stylesheet" href="/css/review.css">
 </head>
 <body>
 <div class="container">

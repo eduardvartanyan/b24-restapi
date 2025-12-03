@@ -41,8 +41,3 @@ button {
 button:hover {
     background: #004ecc;
 }
-
-.checkmark {
-    font-size: 70px;
-    margin-bottom: 20px;
-}

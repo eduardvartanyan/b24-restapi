@@ -11,8 +11,6 @@ readonly class ReviewController
 
     public function showForm(string $dealRid, string $contactRid) : void
     {
-        echo '[ReviewController showForm] start' . '<br>';
-
         $dealId = $this->b24Service->getDealIdByRid($dealRid);
         $contactId = $this->b24Service->getContactIdByRid($contactRid);
         $questions = $this->b24Service->loadListItems(42); // 42 — список вопросов
@@ -29,8 +27,6 @@ readonly class ReviewController
 
     public function submit(): void
     {
-        echo '[ReviewController submit] start' . '<br>';
-
         $dealId    = $_POST['dealId'] ?? null;
         $contactId = $_POST['contactId'] ?? null;
         $answers   = $_POST['rating'] ?? [];
@@ -51,8 +47,6 @@ readonly class ReviewController
 
     private function render(string $template, array $data = []): void
     {
-        echo '[ReviewController render] start' . '<br>';
-
         extract($data);
         require __DIR__ . "/../../../views/{$template}.php";
     }
