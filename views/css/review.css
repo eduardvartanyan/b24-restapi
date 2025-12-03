@@ -1,0 +1,48 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 30px;
+    background: #fafafa;
+}
+
+.container {
+    max-width: 600px;
+    margin: 0 auto;
+    background: #fff;
+    padding: 20px;
+    border-radius: 8px;
+}
+
+h2 {
+    margin-bottom: 20px;
+}
+
+.question-block {
+    margin-bottom: 25px;
+}
+
+.question-title {
+    margin-bottom: 10px;
+    font-weight: bold;
+}
+
+.rating input {
+    margin-right: 5px;
+}
+
+button {
+    padding: 10px 16px;
+    background: #0066ff;
+    border: none;
+    color: white;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+button:hover {
+    background: #004ecc;
+}
+
+.checkmark {
+    font-size: 70px;
+    margin-bottom: 20px;
+}

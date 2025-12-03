@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\ImportController;
+use App\Http\Controllers\ReviewController;
 use App\Services\B24Service;
 use App\Services\DailyImportService;
 use App\Services\OneCService;
@@ -19,3 +20,4 @@ $container->set(DailyImportService::class, fn() => new DailyImportService($conta
 $container->set(ImportController::class,   fn() => new ImportController($container->get(B24Service::class)));
 $container->set(OneCService::class,        fn() => new OneCService());
 $container->set(ServiceBuilder::class,     fn() => ServiceBuilderFactory::createServiceBuilderFromWebhook($_ENV['B24_WEBHOOK_CODE']));
+$container->set(ReviewController::class,   fn() => new ReviewController($container->get(B24Service::class)));

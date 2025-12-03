@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 use App\Helpers\Logger;
 use App\Http\Controllers\ImportController;
+use App\Http\Controllers\ReviewController;
 use App\Http\Middleware;
 use App\Services\DailyImportService;
 use App\Support\Container;
@@ -33,6 +34,21 @@ try {
             $dateFrom = $_GET['date'] ?? '';
             $service->run($dateFrom);
             echo 'Импорт ДТП завершён успешно';
+            break;
+
+        case '/review':
+            // http://89.111.174.132/review?c=123123&d=323423
+            $reviewController = $container->get(ReviewController::class);
+            $reviewController->showForm($_GET['d'] ?? '', $_GET['c'] ?? '');
+            $dealId = '170686';
+            $contactId = '247556';
+            break;
+
+        case '/review/submit':
+            if ($method === 'POST') {
+                $controller = $container->get(ReviewController::class);
+                $controller->submit();
+            }
             break;
 
         case '/test':

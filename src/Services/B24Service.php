@@ -117,4 +117,66 @@ class B24Service
             ]);
         }
     }
+
+    public function loadListItems(int $iblockId): array
+    {
+        echo '[B24Service loadListItems] start' . '<br>';
+
+        try {
+            $items = $this->b24->core->call('lists.element.get', [
+                'IBLOCK_TYPE_ID' => 'lists',
+                'IBLOCK_ID' => $iblockId,
+            ]);
+
+            return $items->getResponseData()->getResult();
+        } catch (Throwable $e) {
+            Logger::error('Ошибка при получении ID контакта', [
+                'file'    => $e->getFile(),
+                'line'    => $e->getLine(),
+                'message' => $e->getMessage(),
+                'data'    => $iblockId
+            ]);
+        }
+
+        return [];
+    }
+
+    public function getDealIdByRid(string $rid): ?int
+    {
+        echo '[B24Service getDealIdByRid] start' . '<br>';
+        // https://fs911.bitrix24.ru/rest/134/c07h1r1izxd0cirv/crm.deal.list.json?FILTER[UF_CRM_1764653513]=28012219
+
+        return null;
+    }
+
+    public function getContactIdByRid(string $rid): ?int
+    {
+        echo '[B24Service getContactIdByRid] start' . '<br>';
+        // https://fs911.bitrix24.ru/rest/134/c07h1r1izxd0cirv/crm.contact.list.json?FILTER[UF_CRM_1764653531]=84271373
+
+        return null;
+    }
+
+    public function addDynamicItem(int $entityTypeId, array $fields): ?int
+    {
+        echo '[B24Service addDynamicItem] start' . '<br>';
+
+        try {
+            $result = $this->b24->getCRMScope()->item()->add($entityTypeId, $fields);
+
+            return $result->item()->id;
+        } catch (Throwable $e) {
+            Logger::error('Ошибка при получении ID контакта', [
+                'file'    => $e->getFile(),
+                'line'    => $e->getLine(),
+                'message' => $e->getMessage(),
+                'data'    => [
+                    'entityTypeId' => $entityTypeId,
+                    'fields'       => $fields,
+                ]
+            ]);
+        }
+
+        return null;
+    }
 }
