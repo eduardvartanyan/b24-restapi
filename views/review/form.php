@@ -14,8 +14,8 @@
         <p class="lead"></p>
     </div>
     <form action="/review/submit" method="POST">
-        <input type="hidden" name="dealId" value="<?= htmlspecialchars($dealId) ?>">
-        <input type="hidden" name="contactId" value="<?= htmlspecialchars($contactId) ?>">
+        <input type="hidden" name="dealIRid" value="<?= htmlspecialchars($dealRid) ?>">
+        <input type="hidden" name="contactRid" value="<?= htmlspecialchars($contactRid) ?>">
         <?php foreach ($questions as $question): ?>
             <div class="question-block">
                 <div class="question-title">
@@ -25,7 +25,7 @@
                     <?php for ($i = 1; $i <= 10; $i++): ?>
                         <label class="rating-item rating-item-<?= $i ?>">
                             <input type="radio"
-                                   name="rating[<?= htmlspecialchars($question['ID']) ?>]"
+                                   name="rating[<?= htmlspecialchars($question['NAME']) ?>]"
                                    value="<?= $i ?>"
                                    required>
                             <span><?= $i ?></span>
@@ -50,11 +50,11 @@
             </div>
             <div class="yesno-block">
                 <label class="yesno-option">
-                    <input type="radio" name="recommend" value="yes" required>
+                    <input type="radio" name="recommend" value="yes">
                     <span>Да</span>
                 </label>
                 <label class="yesno-option">
-                    <input type="radio" name="recommend" value="no" required>
+                    <input type="radio" name="recommend" value="no">
                     <span>Нет</span>
                 </label>
             </div>
@@ -64,21 +64,33 @@
 </div>
 <script>
     document.addEventListener('DOMContentLoaded', () => {
-        const ratingInputs = document.querySelectorAll('input[type="radio"][name^="rating"]');
+
+        const ratingGroups = document.querySelectorAll('.rating');
         const recommendBlock = document.getElementById('recommend-block');
 
         function updateRecommendVisibility() {
+
             let sum = 0;
-            let count = 0;
+            let count = ratingGroups.length;
+            let answered = 0;
 
-            document.querySelectorAll('input[type="radio"][name^="rating"]:checked')
-                .forEach(r => {
-                    sum += parseInt(r.value);
-                    count++;
-                });
+            ratingGroups.forEach(group => {
+                const checked = group.querySelector('input[type="radio"]:checked');
 
-            if (count === 0) {
+                if (checked) {
+                    answered++;
+                    sum += parseInt(checked.value);
+                } else {
+                    sum += 0;
+                }
+            });
+
+            if (answered < count) {
                 recommendBlock.style.display = 'none';
+
+                const selected = document.querySelector('input[name="recommend"]:checked');
+                if (selected) selected.checked = false;
+
                 return;
             }
 
@@ -93,7 +105,10 @@
                 if (selected) selected.checked = false;
             }
         }
-        ratingInputs.forEach(r => r.addEventListener('change', updateRecommendVisibility));
+
+        document.querySelectorAll('input[type="radio"][name^="rating"]').forEach(r => {
+            r.addEventListener('change', updateRecommendVisibility);
+        });
     });
 </script>
 </body>

@@ -37,7 +37,7 @@ try {
             break;
 
         case '/review':
-            // http://89.111.174.132/review?c=123123&d=323423
+            // http://89.111.174.132/review?c=84271373&d=28012219
             $reviewController = $container->get(ReviewController::class);
             $reviewController->showForm($_GET['d'] ?? '', $_GET['c'] ?? '');
             $dealId = '170686';

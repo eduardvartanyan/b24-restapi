@@ -141,14 +141,51 @@ class B24Service
 
     public function getDealIdByRid(string $rid): ?int
     {
-        // https://fs911.bitrix24.ru/rest/134/c07h1r1izxd0cirv/crm.deal.list.json?FILTER[UF_CRM_1764653513]=28012219
+        try {
+            $result = $this->b24->getCRMScope()->deal()->list(
+                [],
+                ['UF_CRM_1764653513' => $rid],
+                ['ID'],
+            );
+            $deals = $result->getDeals();
+
+            if (count($deals) < 0) return null;
+
+            return $deals[0]->ID;
+        } catch (Throwable $e) {
+            Logger::error('Ошибка при получении ID контакта', [
+                'file'    => $e->getFile(),
+                'line'    => $e->getLine(),
+                'message' => $e->getMessage(),
+                'data'    => $rid
+            ]);
+        }
 
         return null;
     }
 
     public function getContactIdByRid(string $rid): ?int
     {
-        // https://fs911.bitrix24.ru/rest/134/c07h1r1izxd0cirv/crm.contact.list.json?FILTER[UF_CRM_1764653531]=84271373
+        try {
+            $result = $this->b24->getCRMScope()->contact()->list(
+                [],
+                ['UF_CRM_1764653531' => $rid],
+                ['ID'],
+                0
+            );
+            $contacts = $result->getContacts();
+
+            if (count($contacts) < 0) return null;
+
+            return $contacts[0]->ID;
+        } catch (Throwable $e) {
+            Logger::error('Ошибка при получении ID контакта', [
+                'file'    => $e->getFile(),
+                'line'    => $e->getLine(),
+                'message' => $e->getMessage(),
+                'data'    => $rid
+            ]);
+        }
 
         return null;
     }

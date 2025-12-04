@@ -11,31 +11,33 @@ readonly class ReviewController
 
     public function showForm(string $dealRid, string $contactRid) : void
     {
-        $dealId = $this->b24Service->getDealIdByRid($dealRid);
-        $contactId = $this->b24Service->getContactIdByRid($contactRid);
         $questions = $this->b24Service->loadListItems(42); // 42 — список вопросов
 
-        $dealId = 170686;
-        $contactId = 247556;
-
         $this->render('review/form', [
-            'dealId'    => $dealId,
-            'contactId' => $contactId,
-            'questions' => $questions,
+            'dealRid'    => $dealRid,
+            'contactRid' => $contactRid,
+            'questions'  => $questions,
         ]);
     }
 
     public function submit(): void
     {
-        $dealId    = $_POST['dealId'] ?? null;
-        $contactId = $_POST['contactId'] ?? null;
-        $answers   = $_POST['rating'] ?? [];
+        $dealRid    = $_POST['dealIRid'] ?? null;
+        $contactRid = $_POST['contactRid'] ?? null;
+        $answers    = $_POST['rating'] ?? [];
+        $comment    = $_POST['comment'] ?? null;
+        $recommend  = $_POST['recommend'] === 'yes';
 
-        if (!$dealId || !$contactId || empty($answers)) {
+        print_r($answers);
+
+        if (!$dealRid || !$contactRid || empty($answers)) {
             http_response_code(400);
             echo 'Некорректные данные';
             return;
         }
+
+        $dealId = $this->b24Service->getDealIdByRid($dealRid);
+        $contactId = $this->b24Service->getContactIdByRid($contactRid);
 
         $fields = [
             'TITLE' => '789',
