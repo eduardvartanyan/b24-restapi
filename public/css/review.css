@@ -140,7 +140,7 @@ body {
 }
 
 .review-textarea:focus {
-    border-color: #2563eb;
+    border-color: #25338a;
     background: #ffffff;
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
     outline: none;
@@ -178,9 +178,9 @@ body {
 }
 
 .yesno-option input:checked + span {
-    background: #2563eb;
+    background: #25338a;
     color: white;
-    border-color: #2563eb;
+    border-color: #25338a;
     box-shadow: 0 0 8px rgba(37, 99, 235, 0.25);
 }
 
@@ -190,7 +190,7 @@ body {
     text-align: center;
     margin-top: 12px;
     padding: 14px 16px;
-    background: linear-gradient(90deg, #2563eb, #1d4ed8);
+    background: linear-gradient(90deg, #25338a, #1d4ed8);
     border: none;
     color: #fff;
     font-weight: 700;
