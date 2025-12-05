@@ -4,8 +4,6 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Helpers\Logger;
-use Bitrix24\SDK\Core\Exceptions\BaseException;
-use Bitrix24\SDK\Core\Exceptions\TransportException;
 use Bitrix24\SDK\Services\ServiceBuilder;
 use Throwable;
 

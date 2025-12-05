@@ -4,10 +4,14 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Services\B24Service;
+use App\Services\ReviewService;
 
 readonly class ReviewController
 {
-    public function __construct(private B24Service $b24Service) {}
+    public function __construct(
+        private B24Service $b24Service,
+        private ReviewService $reviewService,
+    ) {}
 
     public function showForm(string $dealRid, string $contactRid) : void
     {
@@ -22,13 +26,11 @@ readonly class ReviewController
 
     public function submit(): void
     {
-        $dealRid    = $_POST['dealIRid'] ?? null;
+        $dealRid    = $_POST['dealRid'] ?? null;
         $contactRid = $_POST['contactRid'] ?? null;
         $answers    = $_POST['rating'] ?? [];
         $comment    = $_POST['comment'] ?? null;
         $recommend  = $_POST['recommend'] === 'yes';
-
-        print_r($answers);
 
         if (!$dealRid || !$contactRid || empty($answers)) {
             http_response_code(400);
@@ -36,13 +38,13 @@ readonly class ReviewController
             return;
         }
 
-        $dealId = $this->b24Service->getDealIdByRid($dealRid);
-        $contactId = $this->b24Service->getContactIdByRid($contactRid);
-
-        $fields = [
-            'TITLE' => '789',
-        ];
-        $this->b24Service->addDynamicItem(1032, $fields); // 1032 - Отзывы
+        $this->reviewService->saveReview(
+            $dealRid,
+            $contactRid,
+            $answers,
+            $comment,
+            $recommend
+        );
 
         $this->render('review/success', []);
     }

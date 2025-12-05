@@ -14,7 +14,7 @@
         <p class="lead"></p>
     </div>
     <form action="/review/submit" method="POST">
-        <input type="hidden" name="dealIRid" value="<?= htmlspecialchars($dealRid) ?>">
+        <input type="hidden" name="dealRid" value="<?= htmlspecialchars($dealRid) ?>">
         <input type="hidden" name="contactRid" value="<?= htmlspecialchars($contactRid) ?>">
         <?php foreach ($questions as $question): ?>
             <div class="question-block">
