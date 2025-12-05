@@ -29,19 +29,16 @@ try {
             }
             break;
 
-        case '/dtpimport':
-            $service = $container->get(DailyImportService::class);
-            $dateFrom = $_GET['date'] ?? '';
-            $service->run($dateFrom);
-            echo 'Импорт ДТП завершён успешно';
-            break;
+//        case '/dtpimport':
+//            $service = $container->get(DailyImportService::class);
+//            $dateFrom = $_GET['date'] ?? '';
+//            $service->run($dateFrom);
+//            echo 'Импорт ДТП завершён успешно';
+//            break;
 
         case '/review':
-            // http://89.111.174.132/review?c=84271373&d=28012219
             $reviewController = $container->get(ReviewController::class);
             $reviewController->showForm($_GET['d'] ?? '', $_GET['c'] ?? '');
-            $dealId = '170686';
-            $contactId = '247556';
             break;
 
         case '/review/submit':
@@ -51,17 +48,17 @@ try {
             }
             break;
 
-        case '/test':
-            $b24 = ServiceBuilderFactory::createServiceBuilderFromWebhook($_ENV['B24_WEBHOOK_CODE']);
-            $deal = $b24->getCRMScope()->deal()->list(
-                [],
-                [
-                    'UF_CRM_1561010424' => '143930',
-                    'UF_CRM_1574325151082' => '89501062368'
-                ],
-                ['ID']
-            );
-            var_dump($deal->getCoreResponse()->getResponseData()->getResult());
+//        case '/test':
+//            $b24 = ServiceBuilderFactory::createServiceBuilderFromWebhook($_ENV['B24_WEBHOOK_CODE']);
+//            $deal = $b24->getCRMScope()->deal()->list(
+//                [],
+//                [
+//                    'UF_CRM_1561010424' => '143930',
+//                    'UF_CRM_1574325151082' => '89501062368'
+//                ],
+//                ['ID']
+//            );
+//            var_dump($deal->getCoreResponse()->getResponseData()->getResult());
     }
 } catch (Throwable $e) {
     echo $e->getMessage();

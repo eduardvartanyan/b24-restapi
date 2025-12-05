@@ -5,23 +5,26 @@ namespace App\Services;
 
 readonly class ReviewService
 {
+    private const int REVIEW_ENTITY_TYPE_ID = 1032;
+    private const int SCORE_ENTITY_TYPE_ID = 1032;
+
     public function __construct(private B24Service $b24Service) {}
 
     public function saveReview(
-        string $dealRid,
-        string $contactRid,
+        int    $dealId,
+        int    $contactId,
         array  $answers,
         string $comment,
         bool   $recommend
     ): void {
         $fields = [
-            'CONTACT_ID'        => $this->b24Service->getContactIdByRid($contactRid),
-            'PARENT_ID_2'       => $this->b24Service->getDealIdByRid($dealRid),
+            'CONTACT_ID'        => $contactId,
+            'PARENT_ID_2'       => $dealId,
             'ufCrm8_1764745827' => $this->calculateAvgRating($answers),
             'ufCrm8_1764745855' => $comment,
             'ufCrm8_1764745902' => $recommend ? 'Y' : 'N',
         ];
-        $reviewId = $this->b24Service->addDynamicItem(1032, $fields); // 1032 - Отзывы
+        $reviewId = $this->b24Service->addDynamicItem(self::REVIEW_ENTITY_TYPE_ID, $fields);
 
         if ($reviewId) {
             foreach ($answers as $answer => $score) {
@@ -30,9 +33,20 @@ readonly class ReviewService
                     'PARENT_ID_1032'     => $reviewId,
                     'ufCrm10_1764845073' => (int) $score,
                 ];
-                $this->b24Service->addDynamicItem(1036, $fields); // 1036 - Оценки для отзывов
+                $this->b24Service->addDynamicItem(self::SCORE_ENTITY_TYPE_ID, $fields);
             }
         }
+    }
+
+    public function checkReview(int $dealId, int $contactId): bool
+    {
+        $response = $this->b24Service->sendCurl('crm.item.list', [
+            'entityTypeId'        => self::REVIEW_ENTITY_TYPE_ID,
+            'filter[CONTACT_ID]'  => $contactId,
+            'filter[PARENT_ID_2]' => $dealId,
+        ]);
+
+        return $response['total'] && $response['total'] > 0;
     }
 
     private function calculateAvgRating(array $answers): float

@@ -17,9 +17,22 @@ readonly class ReviewController
     {
         $questions = $this->b24Service->loadListItems(42); // 42 — список вопросов
 
+        $dealId = $this->b24Service->getDealIdByRid($dealRid);
+        $contactId = $this->b24Service->getContactIdByRid($contactRid);
+
+        if (!$dealId || !$contactId) {
+            $this->render('review/error', []);
+            return;
+        }
+
+        if ($this->reviewService->checkReview($dealId, $contactId)) {
+            $this->render('review/success', []);
+            return;
+        }
+
         $this->render('review/form', [
-            'dealRid'    => $dealRid,
-            'contactRid' => $contactRid,
+            'dealRid'    => $dealId,
+            'contactRid' => $contactId,
             'questions'  => $questions,
         ]);
     }
