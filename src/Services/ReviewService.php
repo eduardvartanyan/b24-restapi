@@ -6,7 +6,7 @@ namespace App\Services;
 readonly class ReviewService
 {
     private const int REVIEW_ENTITY_TYPE_ID = 1032;
-    private const int SCORE_ENTITY_TYPE_ID = 1032;
+    private const int SCORE_ENTITY_TYPE_ID = 1036;
 
     public function __construct(private B24Service $b24Service) {}
 

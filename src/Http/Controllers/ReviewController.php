@@ -31,8 +31,8 @@ readonly class ReviewController
         }
 
         $this->render('review/form', [
-            'dealRid'    => $dealId,
-            'contactRid' => $contactId,
+            'dealRid'    => $dealRid,
+            'contactRid' => $contactRid,
             'questions'  => $questions,
         ]);
     }
@@ -52,8 +52,8 @@ readonly class ReviewController
         }
 
         $this->reviewService->saveReview(
-            $dealRid,
-            $contactRid,
+            $this->b24Service->getDealIdByRid($dealRid),
+            $this->b24Service->getContactIdByRid($contactRid),
             $answers,
             $comment,
             $recommend
