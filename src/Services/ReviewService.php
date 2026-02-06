@@ -15,14 +15,14 @@ readonly class ReviewService
         int    $contactId,
         array  $answers,
         string $comment,
-        bool   $recommend
+        int    $recommend
     ): void {
         $fields = [
             'CONTACT_ID'        => $contactId,
             'PARENT_ID_2'       => $dealId,
             'ufCrm8_1764745827' => $this->calculateAvgRating($answers),
             'ufCrm8_1764745855' => $comment,
-            'ufCrm8_1764745902' => $recommend ? 'Y' : 'N',
+            'ufCrm8_1770349621' => $recommend,
         ];
         $reviewId = $this->b24Service->addDynamicItem(self::REVIEW_ENTITY_TYPE_ID, $fields);
 

@@ -43,7 +43,7 @@ readonly class ReviewController
         $contactRid = $_POST['contactRid'] ?? null;
         $answers    = $_POST['rating'] ?? [];
         $comment    = $_POST['comment'] ?? null;
-        $recommend  = $_POST['recommend'] === 'yes';
+        $recommend  = (int) $_POST['recommend'];
 
         if (!$dealRid || !$contactRid || empty($answers)) {
             http_response_code(400);
@@ -59,7 +59,7 @@ readonly class ReviewController
             $recommend
         );
 
-        $this->render('review/success', []);
+        $this->render('review/success');
     }
 
     private function render(string $template, array $data = []): void

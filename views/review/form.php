@@ -13,7 +13,7 @@
         <h1>Ваш отзыв</h1>
         <p class="lead"></p>
     </div>
-    <form action="/review/submit" method="POST">
+    <form action="/submit" method="POST">
         <input type="hidden" name="dealRid" value="<?= htmlspecialchars($dealRid) ?>">
         <input type="hidden" name="contactRid" value="<?= htmlspecialchars($contactRid) ?>">
         <?php foreach ($questions as $question): ?>
@@ -45,18 +45,20 @@
             <?php ++$index; ?>
         </div>
         <div class="question-block" id="recommend-block" style="display:none;">
+            <?php $title = 'Оцените вероятность того, что вы порекомендуете Форсайт своим друзьям, если они попадут в ДТП'; ?>
             <div class="question-title">
-                <?= ($index) . '. ' ?>Если Ваш знакомый попал в ДТП, порекомендуете вызвать Форсайт?
+                <?= ($index) . '. ' . $title ?>
             </div>
-            <div class="yesno-block">
-                <label class="yesno-option">
-                    <input type="radio" name="recommend" value="yes">
-                    <span>Да</span>
-                </label>
-                <label class="yesno-option">
-                    <input type="radio" name="recommend" value="no">
-                    <span>Нет</span>
-                </label>
+            <div class="rating recommend">
+                <?php for ($i = 1; $i <= 10; $i++): ?>
+                    <label class="rating-item rating-item-<?= $i ?>">
+                        <input type="radio"
+                               name="recommend"
+                               value="<?= $i ?>"
+                               required>
+                        <span><?= $i ?></span>
+                    </label>
+                <?php endfor; ?>
             </div>
         </div>
         <button type="submit" class="primary-btn">Отправить отзыв</button>
@@ -65,7 +67,7 @@
 <script>
     document.addEventListener('DOMContentLoaded', () => {
 
-        const ratingGroups = document.querySelectorAll('.rating');
+        const ratingGroups = document.querySelectorAll('.rating:not(.recommend)');
         const recommendBlock = document.getElementById('recommend-block');
 
         function updateRecommendVisibility() {

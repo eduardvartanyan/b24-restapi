@@ -36,12 +36,12 @@ try {
 //            echo 'Импорт ДТП завершён успешно';
 //            break;
 
-        case '/review':
+        case '/':
             $reviewController = $container->get(ReviewController::class);
             $reviewController->showForm($_GET['d'] ?? '', $_GET['c'] ?? '');
             break;
 
-        case '/review/submit':
+        case '/submit':
             if ($method === 'POST') {
                 $controller = $container->get(ReviewController::class);
                 $controller->submit();
