@@ -48,6 +48,10 @@ try {
             }
             break;
 
+        case '/api/tg':
+            echo 'Hello TG';
+            break;
+
 //        case '/test':
 //            $b24 = ServiceBuilderFactory::createServiceBuilderFromWebhook($_ENV['B24_WEBHOOK_CODE']);
 //            $deal = $b24->getCRMScope()->deal()->list(
