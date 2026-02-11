@@ -3,10 +3,12 @@ declare(strict_types=1);
 
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\ReviewController;
+use App\Http\Controllers\TgController;
 use App\Services\B24Service;
 use App\Services\DailyImportService;
 use App\Services\OneCService;
 use App\Services\ReviewService;
+use App\Services\TgService;
 use App\Support\Container;
 use Bitrix24\SDK\Services\ServiceBuilder;
 use Bitrix24\SDK\Services\ServiceBuilderFactory;
@@ -23,3 +25,5 @@ $container->set(ImportController::class,   fn() => new ImportController($contain
 $container->set(OneCService::class,        fn() => new OneCService());
 $container->set(ServiceBuilder::class,     fn() => ServiceBuilderFactory::createServiceBuilderFromWebhook($_ENV['B24_WEBHOOK_CODE']));
 $container->set(ReviewController::class,   fn() => new ReviewController($container->get(B24Service::class), $container->get(ReviewService::class)));
+$container->set(TgService::class,          fn() => new TgService());
+$container->set(TgController::class,       fn() => new TgController($container->get(TgService::class)));

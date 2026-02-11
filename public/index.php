@@ -4,6 +4,7 @@ declare(strict_types=1);
 use App\Helpers\Logger;
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\ReviewController;
+use App\Http\Controllers\TgController;
 use App\Http\Middleware;
 use App\Services\DailyImportService;
 use App\Support\Container;
@@ -49,49 +50,8 @@ try {
             break;
 
         case '/api/tg':
-            if ($method !== 'POST') {
-                http_response_code(405);
-                echo 'Method Not Allowed';
-                break;
-            }
-
-            $raw = file_get_contents('php://input') ?: '';
-            $payload = json_decode($raw, true);
-
-            if (!is_array($payload)) {
-                Logger::error('TG webhook: invalid JSON', ['raw' => $raw]);
-                http_response_code(400);
-                echo 'Invalid payload';
-                break;
-            }
-
-            $message = $payload['message'] ?? $payload['edited_message'] ?? null;
-            $from = $message['from'] ?? [];
-            $chat = $message['chat'] ?? [];
-
-            Logger::info('TG webhook: incoming update', [
-                'update_id' => $payload['update_id'] ?? null,
-                'message_id' => $message['message_id'] ?? null,
-                'date' => $message['date'] ?? null,
-                'from' => [
-                    'id' => $from['id'] ?? null,
-                    'username' => $from['username'] ?? null,
-                    'first_name' => $from['first_name'] ?? null,
-                    'last_name' => $from['last_name'] ?? null,
-                    'is_bot' => $from['is_bot'] ?? null,
-                ],
-                'chat' => [
-                    'id' => $chat['id'] ?? null,
-                    'type' => $chat['type'] ?? null,
-                    'title' => $chat['title'] ?? null,
-                    'username' => $chat['username'] ?? null,
-                ],
-                'text' => $message['text'] ?? null,
-                'payload' => $payload,
-            ]);
-
-            http_response_code(200);
-            echo 'OK';
+            $tgController = $container->get(TgController::class);
+            $tgController->handle();
             break;
 
 //        case '/test':
