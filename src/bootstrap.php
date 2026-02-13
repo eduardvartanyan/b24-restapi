@@ -4,6 +4,7 @@ declare(strict_types=1);
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\TgController;
+use App\Repositories\ClickRepository;
 use App\Services\B24Service;
 use App\Services\DailyImportService;
 use App\Services\OneCService;
@@ -27,3 +28,4 @@ $container->set(ServiceBuilder::class,     fn() => ServiceBuilderFactory::create
 $container->set(ReviewController::class,   fn() => new ReviewController($container->get(B24Service::class), $container->get(ReviewService::class)));
 $container->set(TgService::class,          fn() => new TgService());
 $container->set(TgController::class,       fn() => new TgController($container->get(TgService::class)));
+$container->set(ClickRepository::class,    fn() => new ClickRepository());
