@@ -9,7 +9,7 @@ use App\Services\ReviewService;
 readonly class ReviewController
 {
     public function __construct(
-        private B24Service $b24Service,
+        private B24Service    $b24Service,
         private ReviewService $reviewService,
     ) {}
 
@@ -28,6 +28,12 @@ readonly class ReviewController
         if ($this->reviewService->checkReview($dealId, $contactId)) {
             $this->render('review/success', []);
             return;
+        }
+
+        if (!$this->reviewService->checkReviewLinkClick($dealId, $contactId)) {
+            $this->reviewService->saveReviewLinkClick($dealId, $contactId);
+            $count = $this->reviewService->getReviewLinkClickCount($dealId);
+            $this->b24Service->updateDeal($dealId, 'UF_CRM_1770977485', (string) $count);
         }
 
         $this->render('review/form', [

@@ -25,8 +25,8 @@ class ClickRepository
                 VALUES (:deal, :contact);
             ");
             $stmt->execute([
-                ':deal'    => $values['domain'],
-                ':contact' => $values['code'],
+                ':deal'    => $values['deal_id'],
+                ':contact' => $values['contact_id'],
             ]);
         } catch (PDOException $e) {
             throw new RuntimeException(
@@ -35,10 +35,8 @@ class ClickRepository
         }
     }
 
-    public function select(string $deal, string $contact): ?array
+    public function select(int $dealId, int $contactId): ?array
     {
-        if ($deal === '' || $contact === '') return null;
-
         try {
             $stmt = $this->pdo->prepare("
                 SELECT * 
@@ -46,8 +44,8 @@ class ClickRepository
                 WHERE deal = :deal AND contact = :contact;
             ");
             $stmt->execute([
-                ':deal'    => $deal,
-                ':contact' => $contact,
+                ':deal'    => (string) $dealId,
+                ':contact' => (string) $contactId,
             ]);
 
             $result = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -58,6 +56,30 @@ class ClickRepository
         } catch (PDOException $e) {
             throw new RuntimeException(
                 '[ClickRepository->select] Error selecting from clicks -> ' . $e->getMessage()
+            );
+        }
+    }
+
+    public function getByDealId(int $dealId): ?array
+    {
+        try {
+            $stmt = $this->pdo->prepare("
+                SELECT * 
+                FROM clicks 
+                WHERE deal = :deal;
+            ");
+            $stmt->execute([
+                ':deal' => (string) $dealId,
+            ]);
+
+            $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            if (!$result) return null;
+
+            return $result;
+        } catch (PDOException $e) {
+            throw new RuntimeException(
+                '[ClickRepository->getByDealId] Error selecting from clicks -> ' . $e->getMessage()
             );
         }
     }

@@ -3,12 +3,17 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Repositories\ClickRepository;
+
 readonly class ReviewService
 {
     private const int REVIEW_ENTITY_TYPE_ID = 1032;
     private const int SCORE_ENTITY_TYPE_ID = 1036;
 
-    public function __construct(private B24Service $b24Service) {}
+    public function __construct(
+        private B24Service $b24Service,
+        private ClickRepository $clickRepository,
+    ) {}
 
     public function saveReview(
         int    $dealId,
@@ -52,5 +57,31 @@ readonly class ReviewService
     private function calculateAvgRating(array $answers): float
     {
         return array_sum($answers) / count($answers);
+    }
+
+    public function saveReviewLinkClick(int $dealId, int $contactId): void
+    {
+        $this->clickRepository->create([
+            'deal_id'    => $dealId,
+            'contact_id' => $contactId,
+        ]);
+    }
+
+    public function checkReviewLinkClick(int $dealId, int $contactId): bool
+    {
+        $result = $this->clickRepository->select($dealId, $contactId);
+
+        if ($result) return true;
+
+        return false;
+    }
+
+    public function getReviewLinkClickCount(int $dealId): int
+    {
+        $result = $this->clickRepository->getByDealId($dealId);
+
+        if (!$result) return 0;
+
+        return count($result);
     }
 }

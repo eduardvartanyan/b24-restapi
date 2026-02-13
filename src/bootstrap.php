@@ -20,7 +20,7 @@ $dotenv->load();
 
 $container = new Container();
 $container->set(B24Service::class,         fn() => new B24Service($container->get(ServiceBuilder::class)));
-$container->set(ReviewService::class,      fn() => new ReviewService($container->get(B24Service::class)));
+$container->set(ReviewService::class,      fn() => new ReviewService($container->get(B24Service::class), $container->get(ClickRepository::class)));
 $container->set(DailyImportService::class, fn() => new DailyImportService($container->get(B24Service::class), $container->get(OneCService::class)));
 $container->set(ImportController::class,   fn() => new ImportController($container->get(B24Service::class)));
 $container->set(OneCService::class,        fn() => new OneCService());

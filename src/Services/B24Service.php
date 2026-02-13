@@ -231,4 +231,24 @@ class B24Service
 
         return $result ?? [];
     }
+
+    public function updateDeal(int $dealId, string $field, string $value): void
+    {
+        try {
+            $this->b24->getCRMScope()->deal()->update($dealId, [
+                $field => $value
+            ]);
+        } catch (Throwable $e) {
+            Logger::error('Ошибка при обновлении сделки', [
+                'file'    => $e->getFile(),
+                'line'    => $e->getLine(),
+                'message' => $e->getMessage(),
+                'data'    => [
+                    'dealId' => $dealId,
+                    'field'  => $field,
+                    'value'  => $value,
+                ]
+            ]);
+        }
+    }
 }
