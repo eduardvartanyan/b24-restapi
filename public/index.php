@@ -6,6 +6,7 @@ use App\Http\Controllers\ImportController;
 use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\TgController;
 use App\Http\Middleware;
+use App\Services\B24Service;
 use App\Services\DailyImportService;
 use App\Support\Container;
 use Bitrix24\SDK\Services\ServiceBuilderFactory;
@@ -55,16 +56,14 @@ try {
             break;
 
 //        case '/test':
-//            $b24 = ServiceBuilderFactory::createServiceBuilderFromWebhook($_ENV['B24_WEBHOOK_CODE']);
-//            $deal = $b24->getCRMScope()->deal()->list(
-//                [],
-//                [
-//                    'UF_CRM_1561010424' => '143930',
-//                    'UF_CRM_1574325151082' => '89501062368'
-//                ],
-//                ['ID']
-//            );
-//            var_dump($deal->getCoreResponse()->getResponseData()->getResult());
+//            echo '<pre>';
+//            echo $_ENV['B24_WEBHOOK_CODE'] . PHP_EOL;
+//            $b24Service = $container->get(B24Service::class);
+//            $result = $b24Service->getDynamicItem(1032, [
+//                'CONTACT_ID'        => 272082,
+//                'PARENT_ID_2'       => 179482,
+//            ]);
+//            print_r($result);
     }
 } catch (Throwable $e) {
     echo $e->getMessage();

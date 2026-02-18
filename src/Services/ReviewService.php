@@ -22,6 +22,12 @@ readonly class ReviewService
         string $comment,
         int    $recommend
     ): void {
+        $reviewList = $this->b24Service->getDynamicItem(self::REVIEW_ENTITY_TYPE_ID, [
+            'CONTACT_ID'        => $contactId,
+            'PARENT_ID_2'       => $dealId,
+        ]);
+        if (count($reviewList) > 0) return;
+
         $fields = [
             'CONTACT_ID'        => $contactId,
             'PARENT_ID_2'       => $dealId,

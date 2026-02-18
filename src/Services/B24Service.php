@@ -209,6 +209,33 @@ class B24Service
         return null;
     }
 
+    public function getDynamicItem(int $entityTypeId, array $filter): ?array
+    {
+        $result = [];
+
+        try {
+            $items = $this->b24->core->call('crm.item.list', [
+                'entityTypeId' => $entityTypeId,
+                'select'       => ['*'],
+                'filter'       => $filter,
+            ]);
+
+            $result = $items->getResponseData()->getResult()['items'];
+        } catch (Throwable $e) {
+            Logger::error('Ошибка при получении ID контакта', [
+                'file'    => $e->getFile(),
+                'line'    => $e->getLine(),
+                'message' => $e->getMessage(),
+                'data'    => [
+                    'entityTypeId' => $entityTypeId,
+                    'filter'       => $filter,
+                ]
+            ]);
+        }
+
+        return $result;
+    }
+
     public function sendCurl(string $method, array $params): array
     {
         $curl = curl_init();
