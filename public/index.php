@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 use App\Helpers\Logger;
 use App\Http\Controllers\ImportController;
+use App\Http\Controllers\MaxController;
 use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\TgController;
 use App\Http\Middleware;
@@ -53,6 +54,11 @@ try {
         case '/api/tg':
             $tgController = $container->get(TgController::class);
             $tgController->handle();
+            break;
+
+        case '/api/max':
+            $maxController = $container->get(MaxController::class);
+            $maxController->handle();
             break;
 
 //        case '/test':
