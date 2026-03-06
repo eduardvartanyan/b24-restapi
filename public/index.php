@@ -56,6 +56,7 @@ try {
             $tgController->handle();
             break;
 
+        // https://max.ru/id381250859808_bot?start=96147618
         case '/api/max':
             $maxController = $container->get(MaxController::class);
             $maxController->handle();
