@@ -4,10 +4,15 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Helpers\Logger;
+use App\Support\MessageCatalog;
 
 readonly class MaxService
 {
-    public function __construct(private B24Service $b24Service) {}
+    private MessageCatalog $messages;
+
+    public function __construct(private B24Service $b24Service) {
+        $this->messages = new MessageCatalog(__DIR__ . '/../Support/Messages/chatbot.php');
+    }
 
     public function handle(string $raw): array
     {
@@ -22,7 +27,7 @@ readonly class MaxService
             switch ($payload['update_type']) {
                 case 'bot_started':
                     $this->sendMessage($payload['chat_id'], [
-                        'text' => 'Приветственное сообщение',
+                        'text' => $this->messages->get('welcome'),
                     ]);
                     $contactId = $this->b24Service->getContactIdByRid($payload['payload']);
                     Logger::info('Max webhook: incoming update', [
