@@ -88,14 +88,24 @@ readonly class MaxService
         $this->maxBot->on('message_created', function () {
             $update = PHPMaxBot::$currentUpdate;
             $text   = Bot::getText();
+            $chatId = $update['message']['recipient']['chat_id'];
 
             Logger::info('Max webhook: message_created', [
-                'chat_id' => $update['message']['recipient']['chat_id'] ?? null,
+                'chat_id' => $chatId,
                 'text'    => $text,
                 'payload' => $update,
             ]);
+
+            Bot::sendAction($chatId, 'typing_on');
+            sleep(1);
 
              return Bot::sendMessage('Автоответ');
         });
     }
 }
+
+
+//Bot::deleteMyCommands();
+//Bot::setMyCommands([
+//    ['name' => 'menu', 'description' => 'Открыть команды'],
+//]);
