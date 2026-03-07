@@ -11,6 +11,7 @@ use App\Services\B24Service;
 use App\Services\DailyImportService;
 use App\Support\Container;
 use Bitrix24\SDK\Services\ServiceBuilderFactory;
+use PHPMaxBot;
 
 require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/../src/bootstrap.php';
@@ -58,19 +59,15 @@ try {
 
         // https://max.ru/id381250859808_bot?start=96147618
         case '/api/max':
+            Logger::info('[/api/max] Start');
             $maxController = $container->get(MaxController::class);
             $maxController->handle();
             break;
 
-//        case '/test':
-//            echo '<pre>';
-//            echo $_ENV['B24_WEBHOOK_CODE'] . PHP_EOL;
-//            $b24Service = $container->get(B24Service::class);
-//            $result = $b24Service->getDynamicItem(1032, [
-//                'CONTACT_ID'        => 272082,
-//                'PARENT_ID_2'       => 179482,
-//            ]);
-//            print_r($result);
+        case '/test':
+            echo '<pre>';
+            $bot = new PHPMaxBot($_ENV['MAX_BOT_TOKEN']);
+            Logger::info($bot::$token);
     }
 } catch (Throwable $e) {
     echo $e->getMessage();

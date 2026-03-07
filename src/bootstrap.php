@@ -32,4 +32,5 @@ $container->set(TgService::class,          fn() => new TgService());
 $container->set(TgController::class,       fn() => new TgController($container->get(TgService::class)));
 $container->set(MaxController::class,      fn() => new MaxController($container->get(MaxService::class)));
 $container->set(ClickRepository::class,    fn() => new ClickRepository());
-$container->set(MaxService::class,         fn() => new MaxService($container->get(B24Service::class)));
+$container->set(MaxService::class,         fn() => new MaxService($container->get(B24Service::class), $container->get(PHPMaxBot::class)));
+$container->set(PHPMaxBot::class,          fn() => new PHPMaxBot($_ENV['MAX_BOT_TOKEN']));
