@@ -40,6 +40,13 @@ readonly class MaxService
         try {
             $this->registerHandlers();
 
+            $this->maxBot->command('menu', function() use ($payload) {
+                $contactId = $this->b24Service->getContactIdByMaxChatId($payload['message']['recipient']['chat_id']);
+                $menu = $this->getMenu($contactId);
+
+                return Bot::sendMessage($this->messages->get('message__menu'), ['attachments' => [$menu]]);
+            });
+
             $this->maxBot->start([
                 'bot_started',
                 'message_created',
@@ -84,20 +91,13 @@ readonly class MaxService
                 'contact_id' => $contactId,
             ]);
 
+            $menu = $this->getMenu($contactId);
+
             if (isset($contactId)) {
-                $keyboard = Keyboard::inlineKeyboard([
-                    [Keyboard::callback($this->messages->get('button_label__dtp'),    '/dtp')],
-                    [Keyboard::callback($this->messages->get('button_label__status'), '/status')],
-                    [Keyboard::callback($this->messages->get('button_label__ask'),    '/ask')],
-                ]);
-            } else {
-                $keyboard = Keyboard::inlineKeyboard([
-                    [Keyboard::callback($this->messages->get('button_label__dtp'), '/dtp')],
-                    [Keyboard::callback($this->messages->get('button_label__ask'), '/ask')],
-                ]);
+                $this->b24Service->setMaxChatId($contactId, $update['chat_id']);
             }
 
-            return Bot::sendMessage($this->messages->get('message__welcome'), ['attachments' => [$keyboard]]);
+            return Bot::sendMessage($this->messages->get('message__welcome'), ['attachments' => [$menu]]);
         });
 
         $this->maxBot->on('message_created', function () {
@@ -116,6 +116,23 @@ readonly class MaxService
 
              return Bot::sendMessage('Автоответ');
         });
+    }
+
+    public function getMenu(?int $contactId): array
+    {
+        if (isset($contactId)) {
+            $keyboard = Keyboard::inlineKeyboard([
+                [Keyboard::callback($this->messages->get('button_label__dtp'), '/dtp')],
+                [Keyboard::callback($this->messages->get('button_label__status'), '/status')],
+                [Keyboard::callback($this->messages->get('button_label__ask'), '/ask')],
+            ]);
+        } else {
+            $keyboard = Keyboard::inlineKeyboard([
+                [Keyboard::callback($this->messages->get('button_label__dtp'), '/dtp')],
+                [Keyboard::callback($this->messages->get('button_label__ask'), '/ask')],
+            ]);
+        }
+        return $keyboard;
     }
 }
 

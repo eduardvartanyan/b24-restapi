@@ -116,6 +116,25 @@ class B24Service
         }
     }
 
+    public function setMaxChatId(int $contactId, int $maxChatId): void
+    {
+        try {
+            $this->b24->getCRMScope()->contact()->update($contactId, [
+                'UF_CRM_1773132631' => $maxChatId,
+            ]);
+        } catch (Throwable $e) {
+            Logger::error('Ошибка при заполнении Max Chat ID', [
+                'file'    => $e->getFile(),
+                'line'    => $e->getLine(),
+                'message' => $e->getMessage(),
+                'data'    => [
+                    'contactId' => $contactId,
+                    'maxChatId' => $maxChatId,
+                ]
+            ]);
+        }
+    }
+
     public function loadListItems(int $iblockId): array
     {
         try {
@@ -182,6 +201,32 @@ class B24Service
                 'line'    => $e->getLine(),
                 'message' => $e->getMessage(),
                 'data'    => $rid
+            ]);
+        }
+
+        return null;
+    }
+
+    public function getContactIdByMaxChatId(int $maxChatId): ?int
+    {
+        try {
+            $result = $this->b24->getCRMScope()->contact()->list(
+                [],
+                ['UF_CRM_1773132631' => $maxChatId],
+                ['ID'],
+                0
+            );
+            $contacts = $result->getContacts();
+
+            if (count($contacts) < 0) return null;
+
+            return $contacts[0]->ID;
+        } catch (Throwable $e) {
+            Logger::error('Ошибка при получении ID контакта', [
+                'file'    => $e->getFile(),
+                'line'    => $e->getLine(),
+                'message' => $e->getMessage(),
+                'data'    => $maxChatId
             ]);
         }
 
