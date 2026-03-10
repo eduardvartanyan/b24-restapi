@@ -9,6 +9,8 @@ use Bot;
 use PHPMaxBot;
 use PHPMaxBot\Exceptions\ApiException;
 use PHPMaxBot\Exceptions\MaxBotException;
+use PHPMaxBot\Helpers\Keyboard;
+use Throwable;
 
 readonly class MaxService
 {
@@ -58,7 +60,7 @@ readonly class MaxService
             ]);
 
             return ['status' => 500, 'body' => 'Bot error'];
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             Logger::error('Max webhook: unexpected exception', [
                 'message' => $e->getMessage(),
                 'trace'   => $e->getTraceAsString(),
@@ -82,7 +84,20 @@ readonly class MaxService
                 'contact_id' => $contactId,
             ]);
 
-            return Bot::sendMessage($this->messages->get('welcome'));
+            if (isset($contactId)) {
+                $keyboard = Keyboard::inlineKeyboard([
+                    [Keyboard::callback($this->messages->get('button_label__dtp'),    '/dtp')],
+                    [Keyboard::callback($this->messages->get('button_label__status'), '/status')],
+                    [Keyboard::callback($this->messages->get('button_label__ask'),    '/ask')],
+                ]);
+            } else {
+                $keyboard = Keyboard::inlineKeyboard([
+                    [Keyboard::callback($this->messages->get('button_label__dtp'), '/dtp')],
+                    [Keyboard::callback($this->messages->get('button_label__ask'), '/ask')],
+                ]);
+            }
+
+            return Bot::sendMessage($this->messages->get('message__welcome'), ['attachments' => [$keyboard]]);
         });
 
         $this->maxBot->on('message_created', function () {
