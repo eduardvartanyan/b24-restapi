@@ -40,16 +40,58 @@ readonly class MaxService
         try {
             $this->registerHandlers();
 
-            $this->maxBot->command('menu', function() use ($payload) {
-                $contactId = $this->b24Service->getContactIdByMaxChatId($payload['message']['recipient']['chat_id']);
+            $this->maxBot->command('menu', function() {
+                $update = PHPMaxBot::$currentUpdate;
+                $contactId = $this->b24Service->getContactIdByMaxChatId($update['message']['recipient']['chat_id']);
                 $menu = $this->getMenu($contactId);
 
                 return Bot::sendMessage($this->messages->get('message__menu'), ['attachments' => [$menu]]);
             });
 
+            $this->maxBot->action('dtp', function() {
+                $update = PHPMaxBot::$currentUpdate;
+
+                return Bot::answerOnCallback($update['callback']['callback_id'], [
+                    'message' => [
+                        'text' => $this->messages->get('message__dtp_location'),
+                        'attachments' => [Keyboard::inlineKeyboard([
+                            [Keyboard::requestGeoLocation($this->messages->get('button_label__geo'))],
+                            [Keyboard::callback($this->messages->get('button_label__address'), 'address')],
+                            [Keyboard::callback($this->messages->get('button_label__back'), 'menu')],
+                        ])]
+                    ]
+                ]);
+            });
+
+            $this->maxBot->action('address', function() {
+                $update = PHPMaxBot::$currentUpdate;
+
+                return Bot::answerOnCallback($update['callback']['callback_id'], [
+                    'message' => [
+                        'text' => $this->messages->get('message__dtp_address'),
+                        'attachments' => [Keyboard::inlineKeyboard([
+                            [Keyboard::callback($this->messages->get('button_label__back'), 'dtp')],
+                        ])]
+                    ]
+                ]);
+            });
+
+            $this->maxBot->action('menu', function() {
+                $update = PHPMaxBot::$currentUpdate;
+                $contactId = $this->b24Service->getContactIdByMaxChatId($update['message']['recipient']['chat_id']);
+
+                return Bot::answerOnCallback($update['callback']['callback_id'], [
+                    'message' => [
+                        'text' => $this->messages->get('message__menu'),
+                        'attachments' => [$this->getMenu($contactId)]
+                    ]
+                ]);
+            });
+
             $this->maxBot->start([
-                'bot_started',
                 'message_created',
+                'message_callback',
+                'bot_started'
             ]);
 
             return ['status' => 200, 'body' => 'OK'];
@@ -122,14 +164,14 @@ readonly class MaxService
     {
         if (isset($contactId)) {
             $keyboard = Keyboard::inlineKeyboard([
-                [Keyboard::callback($this->messages->get('button_label__dtp'), '/dtp')],
-                [Keyboard::callback($this->messages->get('button_label__status'), '/status')],
-                [Keyboard::callback($this->messages->get('button_label__ask'), '/ask')],
+                [Keyboard::callback($this->messages->get('button_label__dtp'), 'dtp')],
+                [Keyboard::callback($this->messages->get('button_label__status'), 'status')],
+                [Keyboard::callback($this->messages->get('button_label__ask'), 'ask')],
             ]);
         } else {
             $keyboard = Keyboard::inlineKeyboard([
-                [Keyboard::callback($this->messages->get('button_label__dtp'), '/dtp')],
-                [Keyboard::callback($this->messages->get('button_label__ask'), '/ask')],
+                [Keyboard::callback($this->messages->get('button_label__dtp'), 'dtp')],
+                [Keyboard::callback($this->messages->get('button_label__ask'), 'ask')],
             ]);
         }
         return $keyboard;
