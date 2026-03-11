@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Helpers\Logger;
+use App\Repositories\ChatStateRepository;
 use App\Support\MessageCatalog;
 use Bot;
 use PHPMaxBot;
@@ -18,7 +19,8 @@ readonly class MaxService
 
     public function __construct(
         private B24Service $b24Service,
-        private PHPMaxBot $maxBot
+        private PHPMaxBot $maxBot,
+        private ChatStateRepository $chatStateRepository,
     ) {
         $this->messages = new MessageCatalog(__DIR__ . '/../Support/Messages/chatbot.php');
     }
@@ -131,19 +133,29 @@ readonly class MaxService
                     'text' => $this->messages->get('message__dtp_location'),
                     'attachments' => [Keyboard::inlineKeyboard([
                         [Keyboard::requestGeoLocation($this->messages->get('button_label__geo'))],
-                        [Keyboard::callback($this->messages->get('button_label__address'), 'address')],
+                        [Keyboard::callback($this->messages->get('button_label__manual_address'), 'manual_address')],
                         [Keyboard::callback($this->messages->get('button_label__back'), 'menu')],
                     ])]
                 ]
             ]);
         });
 
-        $this->maxBot->action('address', function() {
+        $this->maxBot->action('manual_address', function() {
             $update = PHPMaxBot::$currentUpdate;
+            $chatId = $update['message']['recipient']['chat_id'];
+            $userId = $update['message']['recipient']['user_id'];
+
+            $this->chatStateRepository->saveStateForMinutes(
+                $chatId,
+                'dtp.waiting_address',
+                30,
+                $userId,
+                ['scenario' => 'dtp',]
+            );
 
             return Bot::answerOnCallback($update['callback']['callback_id'], [
                 'message' => [
-                    'text' => $this->messages->get('message__dtp_address'),
+                    'text' => $this->messages->get('message__dtp_manual_address'),
                     'attachments' => [Keyboard::inlineKeyboard([
                         [Keyboard::callback($this->messages->get('button_label__back'), 'dtp')],
                     ])]

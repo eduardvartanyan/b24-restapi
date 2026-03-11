@@ -59,15 +59,17 @@ try {
 
         // https://max.ru/id381250859808_bot?start=96147618
         case '/api/max':
-            Logger::info('[/api/max] Start');
             $maxController = $container->get(MaxController::class);
             $maxController->handle();
             break;
 
-        case '/test':
-            echo '<pre>';
-            $bot = new PHPMaxBot($_ENV['MAX_BOT_TOKEN']);
-            Logger::info($bot::$token);
+        // https://review.avarcomf.ru/test
+//        case '/test':
+//            echo '<pre>';
+//            $maxController = $container->get(MaxController::class);
+//            $maxController->handle();
+//            break;
+
     }
 } catch (Throwable $e) {
     echo $e->getMessage();
