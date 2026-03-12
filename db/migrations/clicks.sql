@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS clicks (
-    deal VARCHAR(255) NOT NULL,
-    contact VARCHAR(255) NOT NULL,
+    deal       VARCHAR(255) NOT NULL,
+    contact    VARCHAR(255) NOT NULL,
     clicked_at TIMESTAMP DEFAULT NOW()
 );

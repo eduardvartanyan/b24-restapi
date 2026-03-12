@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Helpers\Logger;
+use App\Repositories\ChatRequestRepository;
 use App\Repositories\ChatStateRepository;
 use App\Support\MessageCatalog;
 use Bot;
@@ -21,6 +22,7 @@ readonly class MaxService
         private B24Service $b24Service,
         private PHPMaxBot $maxBot,
         private ChatStateRepository $chatStateRepository,
+        private ChatRequestRepository $chatRequestRepository
     ) {
         $this->messages = new MessageCatalog(__DIR__ . '/../Support/Messages/chatbot.php');
     }
@@ -127,6 +129,22 @@ readonly class MaxService
     {
         $this->maxBot->action('dtp', function() {
             $update = PHPMaxBot::$currentUpdate;
+            $chatId = $update['message']['recipient']['chat_id'];
+
+            $requestId = $this->chatRequestRepository->create(
+                $chatId,
+                'dtp'
+            );
+
+            $this->chatStateRepository->saveStateForMinutes(
+                $chatId,
+                'dtp.waiting_location',
+                30,
+                context: [
+                    'scenario'   => 'dtp',
+                    'request_id' => $requestId,
+                ]
+            );
 
             return Bot::answerOnCallback($update['callback']['callback_id'], [
                 'message' => [
@@ -150,7 +168,7 @@ readonly class MaxService
                 'dtp.waiting_address',
                 30,
                 $userId,
-                ['scenario' => 'dtp',]
+                ['scenario' => 'dtp']
             );
 
             return Bot::answerOnCallback($update['callback']['callback_id'], [

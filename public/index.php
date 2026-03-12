@@ -7,6 +7,7 @@ use App\Http\Controllers\MaxController;
 use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\TgController;
 use App\Http\Middleware;
+use App\Repositories\ChatRequestRepository;
 use App\Services\B24Service;
 use App\Services\DailyImportService;
 use App\Support\Container;
@@ -64,11 +65,11 @@ try {
             break;
 
         // https://review.avarcomf.ru/test
-//        case '/test':
-//            echo '<pre>';
-//            $maxController = $container->get(MaxController::class);
-//            $maxController->handle();
-//            break;
+        case '/test':
+            echo '<pre>';
+            $maxController = $container->get(MaxController::class);
+            $maxController->handle();
+            break;
 
     }
 } catch (Throwable $e) {
