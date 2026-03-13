@@ -25,43 +25,64 @@ readonly class ChatRequestRepository
         int|string $chatId,
         string $type,
         ?int $userId = null,
-        ?string $address = null,
         ?string $phone = null,
         array $payload = []
     ): int {
+
         $sql = sprintf(
-            'INSERT INTO %s (
-                chat_id,
-                user_id,
-                type,
-                status,
-                address,
-                phone,
-                payload,
-                created_at,
-                updated_at
-            ) VALUES (
-                :chat_id,
-                :user_id,
-                :type,
-                :status,
-                :address,
-                :phone,
-                CAST(:payload AS JSONB),
-                NOW(),
-                NOW()
-            )
-            RETURNING id',
+            'SELECT id
+         FROM %s
+         WHERE chat_id = :chat_id
+           AND type = :type
+           AND status = :status
+         LIMIT 1',
             self::TABLE
         );
 
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute([
             'chat_id' => $chatId,
+            'type' => $type,
+            'status' => self::STATUS_DRAFT,
+        ]);
+
+        $existingId = $stmt->fetchColumn();
+
+        if ($existingId !== false) {
+            return (int)$existingId;
+        }
+
+        $sql = sprintf(
+            'INSERT INTO %s (
+            chat_id,
+            user_id,
+            type,
+            status,
+            phone,
+            payload,
+            created_at,
+            updated_at
+        ) VALUES (
+            :chat_id,
+            :user_id,
+            :type,
+            :status,
+            :phone,
+            CAST(:payload AS JSONB),
+            NOW(),
+            NOW()
+        )
+        RETURNING id',
+            self::TABLE
+        );
+
+        $stmt = $this->pdo->prepare($sql);
+
+        $stmt->execute([
+            'chat_id' => $chatId,
             'user_id' => $userId,
             'type' => $type,
             'status' => self::STATUS_DRAFT,
-            'address' => $address,
             'phone' => $phone,
             'payload' => $this->encodeJson($payload),
         ]);
@@ -87,7 +108,6 @@ readonly class ChatRequestRepository
                 current_step,
                 crm_entity_type,
                 crm_entity_id,
-                address,
                 phone,
                 payload,
                 error_message,
@@ -123,7 +143,6 @@ readonly class ChatRequestRepository
                 current_step,
                 crm_entity_type,
                 crm_entity_id,
-                address,
                 phone,
                 payload,
                 error_message,
@@ -150,21 +169,44 @@ readonly class ChatRequestRepository
         return $row ? $this->normalizeRow($row) : null;
     }
 
-    public function setAddress(int $requestId, string $address): void
+    public function getActiveByChatAndType(int|string $chatId, string $type): ?array
     {
         $sql = sprintf(
-            'UPDATE %s
-            SET address = :address,
-                updated_at = NOW()
-            WHERE id = :id',
+            'SELECT
+            id,
+            chat_id,
+            user_id,
+            type,
+            status,
+            current_step,
+            crm_entity_type,
+            crm_entity_id,
+            phone,
+            payload,
+            error_message,
+            created_at,
+            updated_at,
+            completed_at,
+            cancelled_at
+        FROM %s
+        WHERE chat_id = :chat_id
+          AND type = :type
+          AND status = :status
+        ORDER BY created_at DESC
+        LIMIT 1',
             self::TABLE
         );
 
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute([
-            'id' => $requestId,
-            'address' => trim($address),
+            'chat_id' => $chatId,
+            'type' => $type,
+            'status' => self::STATUS_DRAFT,
         ]);
+
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        return $row ? $this->normalizeRow($row) : null;
     }
 
     public function setPhone(int $requestId, string $phone): void
@@ -345,7 +387,6 @@ readonly class ChatRequestRepository
         }
 
         $allowedFields = [
-            'address',
             'phone',
             'current_step',
             'crm_entity_type',

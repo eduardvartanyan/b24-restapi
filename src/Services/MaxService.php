@@ -19,10 +19,11 @@ readonly class MaxService
     private MessageCatalog $messages;
 
     public function __construct(
-        private B24Service $b24Service,
+        private B24Service $b24,
         private PHPMaxBot $maxBot,
         private ChatStateRepository $chatStateRepository,
-        private ChatRequestRepository $chatRequestRepository
+        private ChatRequestRepository $chatRequestRepository,
+        private DaDataService $daData,
     ) {
         $this->messages = new MessageCatalog(__DIR__ . '/../Support/Messages/chatbot.php');
     }
@@ -47,7 +48,7 @@ readonly class MaxService
 
             $this->maxBot->command('menu', function() {
                 $update = PHPMaxBot::$currentUpdate;
-                $contactId = $this->b24Service->getContactIdByMaxChatId($update['message']['recipient']['chat_id']);
+                $contactId = $this->b24->getContactIdByMaxChatId($update['message']['recipient']['chat_id']);
                 $menu = $this->getMenu($contactId);
 
                 return Bot::sendMessage($this->messages->get('message__menu'), ['attachments' => [$menu]]);
@@ -84,13 +85,16 @@ readonly class MaxService
         }
     }
 
+    /**
+     * @throws MaxBotException
+     */
     private function registerHandlers(): void
     {
         $this->maxBot->on('bot_started', function () {
             $update = PHPMaxBot::$currentUpdate;
 
             $rid = $update['payload'] ?? null;
-            $contactId = $rid ? $this->b24Service->getContactIdByRid((string)$rid) : null;
+            $contactId = $rid ? $this->b24->getContactIdByRid((string)$rid) : null;
 
             Logger::info('Max webhook: bot_started', [
                 'chat_id'    => $update['chat_id'] ?? null,
@@ -101,7 +105,7 @@ readonly class MaxService
             $menu = $this->getMenu($contactId);
 
             if (isset($contactId)) {
-                $this->b24Service->setMaxChatId($contactId, $update['chat_id']);
+                $this->b24->setMaxChatId($contactId, $update['chat_id']);
             }
 
             return Bot::sendMessage($this->messages->get('message__welcome'), ['attachments' => [$menu]]);
@@ -109,27 +113,89 @@ readonly class MaxService
 
         $this->maxBot->on('message_created', function () {
             $update = PHPMaxBot::$currentUpdate;
-            $text   = Bot::getText();
             $chatId = $update['message']['recipient']['chat_id'];
+            $userId = $update['message']['recipient']['user_id'];
+            $chatState = $this->chatStateRepository->getState($chatId);
 
             Logger::info('Max webhook: message_created', [
-                'chat_id' => $chatId,
-                'text'    => $text,
-                'payload' => $update,
+                'chat_id'       => $chatId,
+                'update'        => $update,
+                'chat_state'    => $chatState,
             ]);
 
             Bot::sendAction($chatId, 'typing_on');
-            sleep(1);
 
-             return Bot::sendMessage('Автоответ');
+            if ($chatState == 'dtp.waiting_location') {
+                if (
+                    isset($update['message']['body']['attachments'])
+                    && is_array($update['message']['body']['attachments'])
+                    && count($update['message']['body']['attachments'])
+                ) {
+                    $attachment = $update['message']['body']['attachments'][0];
+
+                    if ($attachment['type'] === 'location') {
+                        if ($request = $this->chatRequestRepository->getActiveByChatAndType($chatId, 'dtp')) {
+                            $address = $this->daData->getAddressByGeolocation(
+                                $attachment['latitude'],
+                                $attachment['longitude']
+                            );
+
+                            $this->chatRequestRepository->setPayload($request['id'], [
+                                'location' => [
+                                    'lat' => $attachment['latitude'],
+                                    'lon' => $attachment['longitude'],
+                                    'address' => $address,
+                                ]
+                            ]);
+
+                            $this->chatStateRepository->saveStateForMinutes(
+                                $chatId,
+                                'dtp.waiting_address',
+                                30,
+                                $userId,
+                                context: [
+                                    'scenario'   => 'dtp',
+                                    'request_id' => $request['id'],
+                                ]
+                            );
+
+                            return Bot::sendMessage(
+                                'Подтвердите адрес: ' . $address,
+                                [
+                                    'attachments' => [Keyboard::inlineKeyboard([
+                                        [Keyboard::callback($this->messages->get('button_label__correct'), 'address_confirmed')],
+                                        [Keyboard::callback($this->messages->get('button_label__manual_address'), 'manual_address')],
+                                        [Keyboard::callback($this->messages->get('button_label__cancel'), 'menu')],
+                                    ])]
+                                ]
+                            );
+                        }
+                    }
+                }
+            }
+
+            return Bot::sendMessage('Автоответ 1');
         });
     }
 
     private function registerActions(): void
     {
+        $this->maxBot->action('menu', function() {
+            $update = PHPMaxBot::$currentUpdate;
+            $contactId = $this->b24->getContactIdByMaxChatId($update['message']['recipient']['chat_id']);
+
+            return Bot::answerOnCallback($update['callback']['callback_id'], [
+                'message' => [
+                    'text' => $this->messages->get('message__menu'),
+                    'attachments' => [$this->getMenu($contactId)]
+                ]
+            ]);
+        });
+
         $this->maxBot->action('dtp', function() {
             $update = PHPMaxBot::$currentUpdate;
             $chatId = $update['message']['recipient']['chat_id'];
+            $userId = $update['message']['recipient']['user_id'];
 
             $requestId = $this->chatRequestRepository->create(
                 $chatId,
@@ -140,6 +206,7 @@ readonly class MaxService
                 $chatId,
                 'dtp.waiting_location',
                 30,
+                $userId,
                 context: [
                     'scenario'   => 'dtp',
                     'request_id' => $requestId,
@@ -154,6 +221,18 @@ readonly class MaxService
                         [Keyboard::callback($this->messages->get('button_label__manual_address'), 'manual_address')],
                         [Keyboard::callback($this->messages->get('button_label__back'), 'menu')],
                     ])]
+                ]
+            ]);
+        });
+
+        $this->maxBot->action('address_confirmed', function() {
+            $update = PHPMaxBot::$currentUpdate;
+            $contactId = $this->b24->getContactIdByMaxChatId($update['message']['recipient']['chat_id']);
+
+            return Bot::answerOnCallback($update['callback']['callback_id'], [
+                'message' => [
+                    'text' => $this->messages->get('message__menu'),
+                    'attachments' => [$this->getMenu($contactId)]
                 ]
             ]);
         });
@@ -177,18 +256,6 @@ readonly class MaxService
                     'attachments' => [Keyboard::inlineKeyboard([
                         [Keyboard::callback($this->messages->get('button_label__back'), 'dtp')],
                     ])]
-                ]
-            ]);
-        });
-
-        $this->maxBot->action('menu', function() {
-            $update = PHPMaxBot::$currentUpdate;
-            $contactId = $this->b24Service->getContactIdByMaxChatId($update['message']['recipient']['chat_id']);
-
-            return Bot::answerOnCallback($update['callback']['callback_id'], [
-                'message' => [
-                    'text' => $this->messages->get('message__menu'),
-                    'attachments' => [$this->getMenu($contactId)]
                 ]
             ]);
         });

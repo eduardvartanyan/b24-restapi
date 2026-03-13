@@ -7,7 +7,6 @@ CREATE TABLE chat_requests (
       current_step        VARCHAR(100),
       crm_entity_type     VARCHAR(50),
       crm_entity_id       BIGINT,
-      address             TEXT,
       phone               VARCHAR(50),
       payload             JSONB,
       error_message       TEXT,
@@ -16,3 +15,6 @@ CREATE TABLE chat_requests (
       completed_at        TIMESTAMP WITH TIME ZONE,
       cancelled_at        TIMESTAMP WITH TIME ZONE
 );
+CREATE UNIQUE INDEX uniq_chat_request_type
+    ON chat_requests (chat_id, type)
+    WHERE status = 'draft';

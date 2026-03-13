@@ -12,4 +12,6 @@ return [
     'button_label__geo' => 'Поделиться геолокацией',
     'button_label__manual_address' => 'Ввести адрес вручную',
     'button_label__back' => 'Назад',
+    'button_label__cancel' => 'Отмена',
+    'button_label__correct' => 'Верно',
 ];

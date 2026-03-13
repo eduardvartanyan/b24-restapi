@@ -7,7 +7,6 @@ use App\Support\Database;
 use PDO;
 use DateTimeImmutable;
 use DateInterval;
-use PDOException;
 use RuntimeException;
 use Throwable;
 

@@ -9,6 +9,7 @@ use App\Repositories\ChatRequestRepository;
 use App\Repositories\ChatStateRepository;
 use App\Repositories\ClickRepository;
 use App\Services\B24Service;
+use App\Services\DaDataService;
 use App\Services\DailyImportService;
 use App\Services\MaxService;
 use App\Services\OneCService;
@@ -24,12 +25,23 @@ $dotenv->load();
 
 $container = new Container();
 $container->set(B24Service::class,              fn() => new B24Service($container->get(ServiceBuilder::class)));
-$container->set(ReviewService::class,           fn() => new ReviewService($container->get(B24Service::class), $container->get(ClickRepository::class)));
-$container->set(DailyImportService::class,      fn() => new DailyImportService($container->get(B24Service::class), $container->get(OneCService::class)));
+$container->set(ReviewService::class,           fn() => new ReviewService(
+    $container->get(B24Service::class),
+    $container->get(ClickRepository::class)
+));
+$container->set(DailyImportService::class,      fn() => new DailyImportService(
+    $container->get(B24Service::class),
+    $container->get(OneCService::class)
+));
 $container->set(ImportController::class,        fn() => new ImportController($container->get(B24Service::class)));
 $container->set(OneCService::class,             fn() => new OneCService());
-$container->set(ServiceBuilder::class,          fn() => ServiceBuilderFactory::createServiceBuilderFromWebhook($_ENV['B24_WEBHOOK_CODE']));
-$container->set(ReviewController::class,        fn() => new ReviewController($container->get(B24Service::class), $container->get(ReviewService::class)));
+$container->set(ServiceBuilder::class,          fn() => ServiceBuilderFactory::createServiceBuilderFromWebhook(
+    $_ENV['B24_WEBHOOK_CODE']
+));
+$container->set(ReviewController::class,        fn() => new ReviewController(
+    $container->get(B24Service::class),
+    $container->get(ReviewService::class)
+));
 $container->set(TgService::class,               fn() => new TgService());
 $container->set(TgController::class,            fn() => new TgController($container->get(TgService::class)));
 $container->set(MaxController::class,           fn() => new MaxController($container->get(MaxService::class)));
@@ -38,8 +50,13 @@ $container->set(MaxService::class,              fn() => new MaxService(
     $container->get(B24Service::class),
     $container->get(PHPMaxBot::class),
     $container->get(ChatStateRepository::class),
-    $container->get(ChatRequestRepository::class)
+    $container->get(ChatRequestRepository::class),
+    $container->get(DaDataService::class)
 ));
 $container->set(PHPMaxBot::class,               fn() => new PHPMaxBot($_ENV['MAX_BOT_TOKEN']));
 $container->set(ChatStateRepository::class,     fn() => new ChatStateRepository());
 $container->set(ChatRequestRepository::class,   fn() => new ChatRequestRepository());
+$container->set(DaDataService::class,           fn() => new DaDataService(
+    $_ENV['DADATA_TOKEN'],
+    $_ENV['DADATA_SECRET']
+));
