@@ -113,6 +113,7 @@ readonly class MaxService
             $chatId = $update['message']['recipient']['chat_id'];
             $userId = $update['message']['recipient']['user_id'];
             $chatState = $this->chatStateRepository->getState($chatId);
+            $dtpRequest = $this->chatRequestRepository->getActiveByChatAndType($chatId, 'dtp');
 
             Logger::info('Max webhook: message_created', [
                 'chat_id'       => $chatId,
@@ -128,13 +129,13 @@ readonly class MaxService
                     $attachment = $update['message']['body']['attachments'][0];
 
                     if ($attachment['type'] === 'location') {
-                        if ($request = $this->chatRequestRepository->getActiveByChatAndType($chatId, 'dtp')) {
+                        if ($dtpRequest) {
                             if ($address = $this->daData->getAddressByGeolocation(
                                 $attachment['latitude'],
                                 $attachment['longitude']
                             )) {
 
-                                $this->chatRequestRepository->setPayload($request['id'], [
+                                $this->chatRequestRepository->setPayload($dtpRequest['id'], [
                                     'location' => [
                                         'lat' => $attachment['latitude'],
                                         'lon' => $attachment['longitude'],
@@ -177,11 +178,11 @@ readonly class MaxService
                     isset($update['message']['body']['text'])
                     && $update['message']['body']['text'] !== ''
                 ) {
-                    if ($request = $this->chatRequestRepository->getActiveByChatAndType($chatId, 'dtp')) {
+                    if ($dtpRequest) {
                         $address = $this->daData->cleanAddress($update['message']['body']['text']);
 
                         if ($address) {
-                            $this->chatRequestRepository->setPayload($request['id'], [
+                            $this->chatRequestRepository->setPayload($dtpRequest['id'], [
                                 'location' => ['address' => $address]
                             ]);
 
@@ -206,6 +207,36 @@ readonly class MaxService
                                 ]
                             );
                         }
+                    }
+                }
+            }
+
+            if ($chatState == 'dtp.waiting_name') {
+                if (
+                    isset($update['message']['body']['text'])
+                    && $update['message']['body']['text'] !== ''
+                ) {
+                    if ($dtpRequest) {
+                        $this->chatStateRepository->saveStateForMinutes(
+                            $chatId,
+                            'dtp.waiting_phone',
+                            30,
+                            $userId,
+                            [
+                                'type' => 'dtp',
+                                'request_id' => $dtpRequest['id'],
+                            ]
+                        );
+                        $payload = $dtpRequest['payload'];
+                        $payload['name'] = $update['message']['body']['text'];
+                        $this->chatRequestRepository->setPayload($dtpRequest['id'], $payload);
+
+                        return Bot::answerOnCallback($update['callback']['callback_id'], [
+                            'message' => [
+                                'text' => $this->messages->get('message__dtp_phone'),
+                                'attachments' => [],
+                            ]
+                        ]);
                     }
                 }
             }
@@ -263,6 +294,33 @@ readonly class MaxService
             ]);
         });
 
+        $this->maxBot->action('manual_address', function() {
+            $update = PHPMaxBot::$currentUpdate;
+            $chatId = $update['message']['recipient']['chat_id'];
+            $userId = $update['message']['recipient']['user_id'];
+            $requestId = $this->chatRequestRepository->create($chatId, 'dtp');
+
+            $this->chatStateRepository->saveStateForMinutes(
+                $chatId,
+                'dtp.waiting_address',
+                30,
+                $userId,
+                [
+                    'type' => 'dtp',
+                    'request_id' => $requestId,
+                ]
+            );
+
+            return Bot::answerOnCallback($update['callback']['callback_id'], [
+                'message' => [
+                    'text' => $this->messages->get('message__dtp_manual_address'),
+                    'attachments' => [Keyboard::inlineKeyboard([
+                        [Keyboard::callback($this->messages->get('button_label__back'), 'dtp')],
+                    ])]
+                ]
+            ]);
+        });
+
         $this->maxBot->action('address_confirmed', function() {
             $update = PHPMaxBot::$currentUpdate;
             $chatId = $update['message']['recipient']['chat_id'];
@@ -293,29 +351,74 @@ readonly class MaxService
             ]);
         });
 
-        $this->maxBot->action('manual_address', function() {
+        $this->maxBot->action('have_victims', function() {
             $update = PHPMaxBot::$currentUpdate;
             $chatId = $update['message']['recipient']['chat_id'];
             $userId = $update['message']['recipient']['user_id'];
-            $requestId = $this->chatRequestRepository->create($chatId, 'dtp');
 
-            $this->chatStateRepository->saveStateForMinutes(
-                $chatId,
-                'dtp.waiting_address',
-                30,
-                $userId,
-                [
-                    'type' => 'dtp',
-                    'request_id' => $requestId,
-                ]
-            );
+            if ($request = $this->chatRequestRepository->getActiveByChatAndType($chatId, 'dtp')) {
+                $this->chatStateRepository->saveStateForMinutes(
+                    $chatId,
+                    'dtp.waiting_name',
+                    30,
+                    $userId,
+                    [
+                        'type' => 'dtp',
+                        'request_id' => $request['id'],
+                    ]
+                );
+                $payload = $request['payload'];
+                $payload['victim'] = true;
+                $this->chatRequestRepository->setPayload($request['id'], $payload);
+
+                return Bot::answerOnCallback($update['callback']['callback_id'], [
+                    'message' => [
+                        'text' => $this->messages->get('message__dtp_name'),
+                        'attachments' => [],
+                    ]
+                ]);
+            }
 
             return Bot::answerOnCallback($update['callback']['callback_id'], [
                 'message' => [
-                    'text' => $this->messages->get('message__dtp_manual_address'),
-                    'attachments' => [Keyboard::inlineKeyboard([
-                        [Keyboard::callback($this->messages->get('button_label__back'), 'dtp')],
-                    ])]
+                    'text' => $this->messages->get('message__something_wrong'),
+                    'attachments' => [],
+                ]
+            ]);
+        });
+
+        $this->maxBot->action('no_have_victims', function() {
+            $update = PHPMaxBot::$currentUpdate;
+            $chatId = $update['message']['recipient']['chat_id'];
+            $userId = $update['message']['recipient']['user_id'];
+
+            if ($request = $this->chatRequestRepository->getActiveByChatAndType($chatId, 'dtp')) {
+                $this->chatStateRepository->saveStateForMinutes(
+                    $chatId,
+                    'dtp.waiting_name',
+                    30,
+                    $userId,
+                    [
+                        'type' => 'dtp',
+                        'request_id' => $request['id'],
+                    ]
+                );
+                $payload = $request['payload'];
+                $payload['victim'] = false;
+                $this->chatRequestRepository->setPayload($request['id'], $payload);
+
+                return Bot::answerOnCallback($update['callback']['callback_id'], [
+                    'message' => [
+                        'text' => $this->messages->get('message__dtp_name'),
+                        'attachments' => [],
+                    ]
+                ]);
+            }
+
+            return Bot::answerOnCallback($update['callback']['callback_id'], [
+                'message' => [
+                    'text' => $this->messages->get('message__something_wrong'),
+                    'attachments' => [],
                 ]
             ]);
         });
