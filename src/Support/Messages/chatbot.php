@@ -13,6 +13,7 @@ return [
     'message__dtp_contact' => 'Отправьте контактные данные',
     'message__dtp_name' => 'Введите имя, для кого вызывается аварийный комиссар',
     'message__dtp_phone' => 'Введите номер телефона, по которому аварийный комиссар свяжется с вами',
+    'message__dtp_request_created' => 'Заявка оформлена, ожидайте',
 
     'button_yes' => 'Да',
     'button_no' => 'Нет',
@@ -23,7 +24,6 @@ return [
     'button_label__manual_address' => 'Ввести адрес вручную',
     'button_label__contact' => 'Поделиться контактом',
     'button_label__contact_manual' => 'Ввести имя и номер телефона вручную',
-    'button_label__phone_manual' => 'Ввести номер телефона вручную',
     'button_label__back' => 'Назад',
     'button_label__cancel' => 'Отмена',
     'button_label__correct' => 'Верно',

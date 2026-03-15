@@ -46,6 +46,13 @@ readonly class MaxService
             $this->registerHandlers();
             $this->registerActions();
 
+            Bot::setMyCommands([
+                [
+                    'name' => 'menu',
+                    'description' => 'Открыть команды'
+                ],
+            ]);
+
             $this->maxBot->command('menu', function() {
                 $update = PHPMaxBot::$currentUpdate;
                 $contactId = $this->b24->getContactIdByMaxChatId($update['message']['recipient']['chat_id']);
@@ -221,6 +228,17 @@ readonly class MaxService
 
                     if ($attachment['type'] === 'contact') {
                         if ($dtpRequest) {
+                            $this->chatStateRepository->saveStateForMinutes(
+                                $chatId,
+                                'dtp.waiting_confirmation',
+                                30,
+                                $userId,
+                                [
+                                    'type' => 'dtp',
+                                    'request_id' => $dtpRequest['id'],
+                                ]
+                            );
+
                             $contact = $this->parseVCard($attachment['payload']['vcf_info']);
 
                             $payload = $dtpRequest['payload'];
@@ -267,28 +285,62 @@ readonly class MaxService
                             ]
                         );
                         $payload = $dtpRequest['payload'];
-                        $payload['name'] = $update['message']['body']['text'];
+                        $payload['contact']['name'] = $update['message']['body']['text'];
                         $this->chatRequestRepository->setPayload($dtpRequest['id'], $payload);
 
                         return Bot::sendMessage(
                             $this->messages->get('message__dtp_phone'),
+                            ['attachments' => [],]
+                        );
+                    }
+                }
+            }
+
+            if ($chatState == 'dtp.waiting_phone') {
+                if (
+                    isset($update['message']['body']['text'])
+                    && $update['message']['body']['text'] !== ''
+                ) {
+                    if ($dtpRequest) {
+                        $this->chatStateRepository->saveStateForMinutes(
+                            $chatId,
+                            'dtp.waiting_confirmation',
+                            30,
+                            $userId,
+                            [
+                                'type' => 'dtp',
+                                'request_id' => $dtpRequest['id'],
+                            ]
+                        );
+                        $payload = $dtpRequest['payload'];
+                        $payload['contact']['phone'] = $update['message']['body']['text'];
+                        $this->chatRequestRepository->setPayload($dtpRequest['id'], $payload);
+
+                        $dtpInfo = $this->printDtpCard($payload);
+
+                        return Bot::sendMessage(
+                            'Подтвердите заявку:' . PHP_EOL . $dtpInfo,
                             [
                                 'attachments' => [Keyboard::inlineKeyboard([
-                                    [Keyboard::requestContact($this->messages->get('button_label__contact'))],
                                     [Keyboard::callback(
-                                        $this->messages->get('button_label__phone_manual'), 'phone_manual'
+                                        $this->messages->get('button_label__correct'),
+                                        'request_confirmed'
                                     )],
-                                ])]
+                                    [Keyboard::callback(
+                                        $this->messages->get('button_label__cancel'),
+                                        'menu'
+                                    )],
+                                ])],
                             ]
                         );
                     }
                 }
             }
 
-            Bot::sendAction($chatId, 'typing_on');
-            sleep(1);
+//            Bot::sendAction($chatId, 'typing_on');
+//            sleep(1);
 
-            return Bot::sendMessage('Автоответ 1');
+            return null;
         });
     }
 
@@ -480,6 +532,45 @@ readonly class MaxService
                 ]
             ]);
         });
+
+        $this->maxBot->action('name', function() {
+            $update = PHPMaxBot::$currentUpdate;
+            $chatId = $update['message']['recipient']['chat_id'];
+            $userId = $update['message']['recipient']['user_id'];
+
+            if ($request = $this->chatRequestRepository->getActiveByChatAndType($chatId, 'dtp')) {
+                $this->chatStateRepository->saveStateForMinutes(
+                    $chatId,
+                    'dtp.waiting_name',
+                    30,
+                    $userId,
+                    [
+                        'type' => 'dtp',
+                        'request_id' => $request['id'],
+                    ]
+                );
+
+                return Bot::answerOnCallback($update['callback']['callback_id'], [
+                    'message' => [
+                        'text' => $this->messages->get('message__dtp_name'),
+                        'attachments' => [],
+                    ]
+                ]);
+            }
+
+            return null;
+        });
+
+        $this->maxBot->action('request_confirmed', function() {
+            $update = PHPMaxBot::$currentUpdate;
+
+            return Bot::answerOnCallback($update['callback']['callback_id'], [
+                'message' => [
+                    'text' => $this->messages->get('message__dtp_request_created'),
+                    'attachments' => [],
+                ]
+            ]);
+        });
     }
 
     private function getMenu(?int $contactId): array
@@ -533,9 +624,3 @@ readonly class MaxService
         }
     }
 }
-
-
-//Bot::deleteMyCommands();
-//Bot::setMyCommands([
-//    ['name' => 'menu', 'description' => 'Открыть команды'],
-//]);
