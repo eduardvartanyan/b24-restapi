@@ -203,7 +203,46 @@ readonly class MaxService
                                             $this->messages->get('button_label__cancel'),
                                             'menu'
                                         )],
-                                    ])]
+                                    ])],
+                                ]
+                            );
+                        }
+                    }
+                }
+            }
+
+            if ($chatState == 'dtp.waiting_contact') {
+                if (
+                    isset($update['message']['body']['attachments'])
+                    && is_array($update['message']['body']['attachments'])
+                    && count($update['message']['body']['attachments'])
+                ) {
+                    $attachment = $update['message']['body']['attachments'][0];
+
+                    if ($attachment['type'] === 'contact') {
+                        if ($dtpRequest) {
+                            $contact = $this->parseVCard($attachment['payload']['vcf_info']);
+
+                            $payload = $dtpRequest['payload'];
+                            $payload['contact'] = $contact;
+
+                            $this->chatRequestRepository->setPayload($dtpRequest['id'], $payload);
+
+                            $dtpInfo = $this->printDtpCard($payload);
+
+                            return Bot::sendMessage(
+                                'Подтвердите заявку:' . PHP_EOL . $dtpInfo,
+                                [
+                                    'attachments' => [Keyboard::inlineKeyboard([
+                                        [Keyboard::callback(
+                                            $this->messages->get('button_label__correct'),
+                                            'request_confirmed'
+                                        )],
+                                        [Keyboard::callback(
+                                            $this->messages->get('button_label__cancel'),
+                                            'menu'
+                                        )],
+                                    ])],
                                 ]
                             );
                         }
@@ -231,12 +270,17 @@ readonly class MaxService
                         $payload['name'] = $update['message']['body']['text'];
                         $this->chatRequestRepository->setPayload($dtpRequest['id'], $payload);
 
-                        return Bot::answerOnCallback($update['callback']['callback_id'], [
-                            'message' => [
-                                'text' => $this->messages->get('message__dtp_phone'),
-                                'attachments' => [],
+                        return Bot::sendMessage(
+                            $this->messages->get('message__dtp_phone'),
+                            [
+                                'attachments' => [Keyboard::inlineKeyboard([
+                                    [Keyboard::requestContact($this->messages->get('button_label__contact'))],
+                                    [Keyboard::callback(
+                                        $this->messages->get('button_label__phone_manual'), 'phone_manual'
+                                    )],
+                                ])]
                             ]
-                        ]);
+                        );
                     }
                 }
             }
@@ -344,7 +388,7 @@ readonly class MaxService
                     'attachments' => [
                         Keyboard::inlineKeyboard([
                             [Keyboard::callback($this->messages->get('button_yes'), 'have_victims')],
-                            [Keyboard::callback($this->messages->get('button_no'), 'no_have_victims')],
+                            [Keyboard::callback($this->messages->get('button_no'), 'no_victims')],
                         ])
                     ],
                 ]
@@ -359,7 +403,7 @@ readonly class MaxService
             if ($request = $this->chatRequestRepository->getActiveByChatAndType($chatId, 'dtp')) {
                 $this->chatStateRepository->saveStateForMinutes(
                     $chatId,
-                    'dtp.waiting_name',
+                    'dtp.waiting_contact',
                     30,
                     $userId,
                     [
@@ -373,8 +417,15 @@ readonly class MaxService
 
                 return Bot::answerOnCallback($update['callback']['callback_id'], [
                     'message' => [
-                        'text' => $this->messages->get('message__dtp_name'),
-                        'attachments' => [],
+                        'text' => $this->messages->get('message__dtp_contact'),
+                        'attachments' => [
+                            Keyboard::inlineKeyboard([
+                                [Keyboard::requestContact($this->messages->get('button_label__contact'))],
+                                [Keyboard::callback(
+                                    $this->messages->get('button_label__contact_manual'), 'name'
+                                )],
+                            ]),
+                        ],
                     ]
                 ]);
             }
@@ -387,7 +438,7 @@ readonly class MaxService
             ]);
         });
 
-        $this->maxBot->action('no_have_victims', function() {
+        $this->maxBot->action('no_victims', function() {
             $update = PHPMaxBot::$currentUpdate;
             $chatId = $update['message']['recipient']['chat_id'];
             $userId = $update['message']['recipient']['user_id'];
@@ -395,7 +446,7 @@ readonly class MaxService
             if ($request = $this->chatRequestRepository->getActiveByChatAndType($chatId, 'dtp')) {
                 $this->chatStateRepository->saveStateForMinutes(
                     $chatId,
-                    'dtp.waiting_name',
+                    'dtp.waiting_contact',
                     30,
                     $userId,
                     [
@@ -409,8 +460,15 @@ readonly class MaxService
 
                 return Bot::answerOnCallback($update['callback']['callback_id'], [
                     'message' => [
-                        'text' => $this->messages->get('message__dtp_name'),
-                        'attachments' => [],
+                        'text' => $this->messages->get('message__dtp_contact'),
+                        'attachments' => [
+                            Keyboard::inlineKeyboard([
+                                [Keyboard::requestContact($this->messages->get('button_label__contact'))],
+                                [Keyboard::callback(
+                                    $this->messages->get('button_label__contact_manual'), 'name'
+                                )],
+                            ]),
+                        ],
                     ]
                 ]);
             }
@@ -439,6 +497,40 @@ readonly class MaxService
             ]);
         }
         return $keyboard;
+    }
+
+    private function parseVCard(string $vcard): array
+    {
+        $result = [];
+
+        $lines = preg_split('/\r\n|\n|\r/', $vcard);
+
+        foreach ($lines as $line) {
+
+            if (str_starts_with($line, 'TEL')) {
+                [$key, $value] = explode(':', $line, 2);
+                $result['phone'] = $value;
+            }
+
+            if (str_starts_with($line, 'FN')) {
+                [$key, $value] = explode(':', $line, 2);
+                $result['name'] = $value;
+            }
+        }
+
+        return $result;
+    }
+
+    private function printDtpCard(array $card): string
+    {
+        try {
+            return 'Адрес: ' . $card['location']['address'] . PHP_EOL
+                . 'Имя: ' . $card['contact']['name'] . PHP_EOL
+                . 'Телефон: ' . $card['contact']['phone'] . PHP_EOL
+                . 'Есть пострадавшие: ' . ($card['victim'] ? 'да' : 'нет');
+        } catch (Throwable $e) {
+            return '';
+        }
     }
 }
 
