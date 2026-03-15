@@ -9,6 +9,7 @@ use App\Http\Controllers\TgController;
 use App\Http\Middleware;
 use App\Repositories\ChatRequestRepository;
 use App\Services\B24Service;
+use App\Services\DaDataService;
 use App\Services\DailyImportService;
 use App\Support\Container;
 use Bitrix24\SDK\Services\ServiceBuilderFactory;
@@ -67,9 +68,9 @@ try {
         // https://review.avarcomf.ru/test
         case '/test':
             echo '<pre>';
-            $maxController = $container->get(MaxController::class);
-            $maxController->handle();
-            break;
+            $daData = $container->get(DaDataService::class);
+            $address = $daData->cleanAddress('ул ленина 12');
+            var_dump($address);
 
     }
 } catch (Throwable $e) {

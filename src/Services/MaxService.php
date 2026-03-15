@@ -30,16 +30,16 @@ readonly class MaxService
 
     public function handle(string $raw): array
     {
-        $payload = json_decode($raw, true);
+        $update = json_decode($raw, true);
 
-        if (!is_array($payload)) {
+        if (!is_array($update)) {
             Logger::error('Max webhook: invalid JSON', ['raw' => $raw]);
-            return ['status' => 400, 'body' => 'Invalid payload'];
+            return ['status' => 400, 'body' => 'Invalid update'];
         }
 
         Logger::info('Max webhook: incoming update', [
-            'update_type' => $payload['update_type'] ?? null,
-            'payload'     => $payload,
+            'update_type' => $update['update_type'] ?? null,
+            'update'     => $update,
         ]);
 
         try {
@@ -85,9 +85,6 @@ readonly class MaxService
         }
     }
 
-    /**
-     * @throws MaxBotException
-     */
     private function registerHandlers(): void
     {
         $this->maxBot->on('bot_started', function () {
@@ -119,13 +116,10 @@ readonly class MaxService
 
             Logger::info('Max webhook: message_created', [
                 'chat_id'       => $chatId,
-                'update'        => $update,
                 'chat_state'    => $chatState,
             ]);
 
-            Bot::sendAction($chatId, 'typing_on');
-
-            if ($chatState == 'dtp.waiting_location') {
+            if ($chatState == 'dtp.waiting_address') {
                 if (
                     isset($update['message']['body']['attachments'])
                     && is_array($update['message']['body']['attachments'])
@@ -135,37 +129,79 @@ readonly class MaxService
 
                     if ($attachment['type'] === 'location') {
                         if ($request = $this->chatRequestRepository->getActiveByChatAndType($chatId, 'dtp')) {
-                            $address = $this->daData->getAddressByGeolocation(
+                            if ($address = $this->daData->getAddressByGeolocation(
                                 $attachment['latitude'],
                                 $attachment['longitude']
-                            );
+                            )) {
 
+                                $this->chatRequestRepository->setPayload($request['id'], [
+                                    'location' => [
+                                        'lat' => $attachment['latitude'],
+                                        'lon' => $attachment['longitude'],
+                                        'address' => $address,
+                                    ]
+                                ]);
+
+                                return Bot::sendMessage(
+                                    $this->messages->get('message__dtp_confirm_address') . $address,
+                                    [
+                                        'attachments' => [Keyboard::inlineKeyboard([
+                                            [Keyboard::callback(
+                                                $this->messages->get('button_label__correct'),
+                                                'address_confirmed'
+                                            )],
+                                            [Keyboard::callback(
+                                                $this->messages->get('button_label__manual_address'),
+                                                'manual_address'
+                                            )],
+                                            [Keyboard::callback(
+                                                $this->messages->get('button_label__cancel'),
+                                                'menu'
+                                            )],
+                                        ])]
+                                    ]
+                                );
+                            } else {
+                                return Bot::sendMessage($this->messages->get('message__dtp_location_wrong'), [
+                                        'attachments' => [Keyboard::inlineKeyboard([
+                                            [Keyboard::callback(
+                                                $this->messages->get('button_label__cancel'), 'menu'
+                                            )],
+                                        ])]
+                                    ]
+                                );
+                            }
+                        }
+                    }
+                } elseif (
+                    isset($update['message']['body']['text'])
+                    && $update['message']['body']['text'] !== ''
+                ) {
+                    if ($request = $this->chatRequestRepository->getActiveByChatAndType($chatId, 'dtp')) {
+                        $address = $this->daData->cleanAddress($update['message']['body']['text']);
+
+                        if ($address) {
                             $this->chatRequestRepository->setPayload($request['id'], [
-                                'location' => [
-                                    'lat' => $attachment['latitude'],
-                                    'lon' => $attachment['longitude'],
-                                    'address' => $address,
-                                ]
+                                'location' => ['address' => $address]
                             ]);
 
-                            $this->chatStateRepository->saveStateForMinutes(
-                                $chatId,
-                                'dtp.waiting_address',
-                                30,
-                                $userId,
-                                context: [
-                                    'scenario'   => 'dtp',
-                                    'request_id' => $request['id'],
-                                ]
-                            );
-
                             return Bot::sendMessage(
-                                'Подтвердите адрес: ' . $address,
+                                $this->messages->get('message__dtp_confirm_address') . $address,
                                 [
                                     'attachments' => [Keyboard::inlineKeyboard([
-                                        [Keyboard::callback($this->messages->get('button_label__correct'), 'address_confirmed')],
-                                        [Keyboard::callback($this->messages->get('button_label__manual_address'), 'manual_address')],
-                                        [Keyboard::callback($this->messages->get('button_label__cancel'), 'menu')],
+                                        [Keyboard::callback(
+                                            $this->messages->get('button_label__correct'),
+                                            'address_confirmed'
+                                        )],
+                                        [Keyboard::callback(
+                                            $this->messages->get('message__dtp_manual_address_again'),
+                                            'manual_address'
+                                        )],
+                                        [Keyboard::requestGeoLocation($this->messages->get('button_label__geo'))],
+                                        [Keyboard::callback(
+                                            $this->messages->get('button_label__cancel'),
+                                            'menu'
+                                        )],
                                     ])]
                                 ]
                             );
@@ -173,6 +209,9 @@ readonly class MaxService
                     }
                 }
             }
+
+            Bot::sendAction($chatId, 'typing_on');
+            sleep(1);
 
             return Bot::sendMessage('Автоответ 1');
         });
@@ -196,19 +235,15 @@ readonly class MaxService
             $update = PHPMaxBot::$currentUpdate;
             $chatId = $update['message']['recipient']['chat_id'];
             $userId = $update['message']['recipient']['user_id'];
-
-            $requestId = $this->chatRequestRepository->create(
-                $chatId,
-                'dtp'
-            );
+            $requestId = $this->chatRequestRepository->create($chatId, 'dtp');
 
             $this->chatStateRepository->saveStateForMinutes(
                 $chatId,
-                'dtp.waiting_location',
+                'dtp.waiting_address',
                 30,
                 $userId,
                 context: [
-                    'scenario'   => 'dtp',
+                    'type' => 'dtp',
                     'request_id' => $requestId,
                 ]
             );
@@ -218,7 +253,10 @@ readonly class MaxService
                     'text' => $this->messages->get('message__dtp_location'),
                     'attachments' => [Keyboard::inlineKeyboard([
                         [Keyboard::requestGeoLocation($this->messages->get('button_label__geo'))],
-                        [Keyboard::callback($this->messages->get('button_label__manual_address'), 'manual_address')],
+                        [Keyboard::callback(
+                            $this->messages->get('button_label__manual_address'),
+                            'manual_address'
+                        )],
                         [Keyboard::callback($this->messages->get('button_label__back'), 'menu')],
                     ])]
                 ]
@@ -227,12 +265,30 @@ readonly class MaxService
 
         $this->maxBot->action('address_confirmed', function() {
             $update = PHPMaxBot::$currentUpdate;
-            $contactId = $this->b24->getContactIdByMaxChatId($update['message']['recipient']['chat_id']);
+            $chatId = $update['message']['recipient']['chat_id'];
+            $userId = $update['message']['recipient']['user_id'];
+            $requestId = $this->chatRequestRepository->create($chatId, 'dtp');
+
+            $this->chatStateRepository->saveStateForMinutes(
+                $chatId,
+                'dtp.waiting_victims',
+                30,
+                $userId,
+                [
+                    'type' => 'dtp',
+                    'request_id' => $requestId,
+                ]
+            );
 
             return Bot::answerOnCallback($update['callback']['callback_id'], [
                 'message' => [
-                    'text' => $this->messages->get('message__menu'),
-                    'attachments' => [$this->getMenu($contactId)]
+                    'text' => $this->messages->get('message__dtp_victims'),
+                    'attachments' => [
+                        Keyboard::inlineKeyboard([
+                            [Keyboard::callback($this->messages->get('button_yes'), 'have_victims')],
+                            [Keyboard::callback($this->messages->get('button_no'), 'no_have_victims')],
+                        ])
+                    ],
                 ]
             ]);
         });
@@ -241,13 +297,17 @@ readonly class MaxService
             $update = PHPMaxBot::$currentUpdate;
             $chatId = $update['message']['recipient']['chat_id'];
             $userId = $update['message']['recipient']['user_id'];
+            $requestId = $this->chatRequestRepository->create($chatId, 'dtp');
 
             $this->chatStateRepository->saveStateForMinutes(
                 $chatId,
                 'dtp.waiting_address',
                 30,
                 $userId,
-                ['scenario' => 'dtp']
+                [
+                    'type' => 'dtp',
+                    'request_id' => $requestId,
+                ]
             );
 
             return Bot::answerOnCallback($update['callback']['callback_id'], [

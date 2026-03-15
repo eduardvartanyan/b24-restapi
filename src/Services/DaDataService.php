@@ -15,11 +15,52 @@ readonly class DaDataService
 
     public function getAddressByGeolocation(float $latitude, float $longitude): bool|string
     {
+        $data = $this->apiRequest(
+            'https://suggestions.dadata.ru/suggestions/api/4_1/rs/geolocate/address',
+            [
+                'lat'           => $latitude,
+                'lon'           => $longitude,
+                'radius_meters' => 100,
+            ]
+        );
+
+        if (
+            isset($data['suggestions'])
+            && is_array($data['suggestions'])
+            && count($data['suggestions'])
+        ) {
+            return $data['suggestions'][0]['value'];
+        }
+
+        return false;
+    }
+
+    public function cleanAddress(string $str): bool|string
+    {
+        $data = $this->apiRequest(
+            'https://cleaner.dadata.ru/api/v1/clean/address',
+            ['"Иркутск ' . $str . '"'],
+        );
+
+        if (
+            count($data)
+            && isset($data[0]['result'])
+            && $data[0]['result'] !== 'г Иркутск'
+        ) {
+            return $data[0]['result'];
+        }
+
+        return false;
+    }
+
+    private function apiRequest(string $url, array $postFields): bool|array
+    {
         try {
+
             $curl = curl_init();
 
             curl_setopt_array($curl, [
-                CURLOPT_URL => 'https://suggestions.dadata.ru/suggestions/api/4_1/rs/geolocate/address',
+                CURLOPT_URL => $url,
                 CURLOPT_RETURNTRANSFER => true,
                 CURLOPT_ENCODING => '',
                 CURLOPT_MAXREDIRS => 10,
@@ -27,11 +68,7 @@ readonly class DaDataService
                 CURLOPT_FOLLOWLOCATION => true,
                 CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
                 CURLOPT_CUSTOMREQUEST => 'POST',
-                CURLOPT_POSTFIELDS => json_encode([
-                    'lat'           => $latitude,
-                    'lon'           => $longitude,
-                    'radius_meters' => 100,
-                ]),
+                CURLOPT_POSTFIELDS => json_encode($postFields),
                 CURLOPT_HTTPHEADER => [
                     'Content-Type: application/json',
                     'Accept: application/json',
@@ -43,30 +80,18 @@ readonly class DaDataService
             $response = curl_exec($curl);
             curl_close($curl);
 
-            Logger::info('[DaDataService] getAddressByGeolocation', [
-                'latitude' => $latitude,
-                'longitude' => $longitude,
+            Logger::info('[DaDataService] apiRequest', [
+                'url' => $url,
+                'post_fields' => $postFields,
                 'response' => $response,
             ]);
 
-            $data = json_decode($response, true);
-
-            if (
-                isset($data['suggestions'])
-                && is_array($data['suggestions'])
-                && count($data['suggestions'])
-            ) {
-                return $data['suggestions'][0]['value'];
-            }
+            return json_decode($response, true);
         } catch (Throwable $e) {
-            Logger::error('[DaDataService] getAddressByGeolocation', [
+            Logger::error('[DaDataService] apiRequest', [
                 'file'    => $e->getFile(),
                 'line'    => $e->getLine(),
                 'message' => $e->getMessage(),
-                'data'    => [
-                    'latitude' => $latitude,
-                    'longitude' => $longitude,
-                ]
             ]);
         }
 
