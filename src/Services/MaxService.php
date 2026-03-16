@@ -92,6 +92,8 @@ readonly class MaxService
         }
     }
 
+    // TODO: Настроить добавление контакта в пэйлоад заявки
+
     private function registerHandlers(): void
     {
         $this->maxBot->on('bot_started', function () {
@@ -247,6 +249,8 @@ readonly class MaxService
                             $this->chatRequestRepository->setPayload($dtpRequest['id'], $payload);
                             $this->chatRequestRepository->setPhone($dtpRequest['id'], $contact['phone']);
 
+                            // TODO: Пытаться найти контакт по номеру телефона
+
                             $dtpInfo = $this->printDtpCard($payload);
 
                             return Bot::sendMessage(
@@ -316,7 +320,8 @@ readonly class MaxService
                         $payload = $dtpRequest['payload'];
                         $payload['contact']['phone'] = $update['message']['body']['text'];
                         $this->chatRequestRepository->setPayload($dtpRequest['id'], $payload);
-                        $this->chatRequestRepository->setPhone($dtpRequest['id'], $update['message']['body']['text']);
+
+                        // TODO: Попытаться найти контакт для заявки по номеру телефона
 
                         $dtpInfo = $this->printDtpCard($payload);
 
@@ -570,6 +575,8 @@ readonly class MaxService
             $dtpRequest = $this->chatRequestRepository->getActiveByChatAndType($chatId, 'dtp');
             $contactId = $this->b24->getContactIdByMaxChatId($chatId);
 
+            // TODO: Добавить создание контакта, если его еще нет в пэйлоад
+
             if ($dealId = $this->b24->addDeal([
                 'TYPE_ID' => 'SALE',
                 'STAGE_ID' => 'C14:NEW',
@@ -598,6 +605,47 @@ readonly class MaxService
 
             return null;
         });
+    }
+
+    public function markDtpRequestInWork(int|string $dealId, string $commissarName, string $commissarPhone): array
+    {
+        try {
+            $dtpRequest = $this->chatRequestRepository->getByDealIdAndType($dealId, 'dtp');
+            $payload = $dtpRequest['payload'];
+            $payload['commissar'] = $commissarName;
+            $this->chatRequestRepository->markInWork($dtpRequest['id']);
+            $this->chatRequestRepository->setPayload($dtpRequest['id'], $payload);
+
+            $commissarPhone = $this->normalizePhone($commissarPhone);
+
+            Bot::sendMessageToChat($dtpRequest['chat_id'],
+                "Заявка № $dealId принята! Комиссар $commissarName, тел. $commissarPhone, "
+                . "выедет к вам через ~25 минут. Ожидайте звонка."
+            );
+
+            return ['status' => 200, 'body' => 'OK'];
+        } catch (ApiException $e) {
+            Logger::error('Max webhook: API exception', [
+                'message' => $e->getMessage(),
+                'code'    => method_exists($e, 'getApiErrorCode') ? $e->getApiErrorCode() : null,
+            ]);
+
+            return ['status' => 500, 'body' => 'MAX API error'];
+        } catch (MaxBotException $e) {
+            Logger::error('Max webhook: library exception', [
+                'message' => $e->getMessage(),
+                'context' => method_exists($e, 'getContext') ? $e->getContext() : null,
+            ]);
+
+            return ['status' => 500, 'body' => 'Bot error'];
+        } catch (Throwable $e) {
+            Logger::error('Max webhook: unexpected exception', [
+                'message' => $e->getMessage(),
+                'trace'   => $e->getTraceAsString(),
+            ]);
+
+            return ['status' => 500, 'body' => 'Internal error'];
+        }
     }
 
     private function getMenu(?int $contactId): array
@@ -658,5 +706,10 @@ readonly class MaxService
             ['г. Иркутск', ' ул. ', ' '],
             $address
         ));
+    }
+
+    private function normalizePhone(string $phone): string
+    {
+        return '+7' . substr(str_replace(['(', ')', '-', ' '], '', $phone), -10);
     }
 }

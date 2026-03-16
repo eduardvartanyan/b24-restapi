@@ -12,6 +12,7 @@ readonly class ChatRequestRepository
     private const string TABLE = 'chat_requests';
     public const string STATUS_DRAFT = 'draft';
     public const string STATUS_SENT = 'sent';
+    public const string STATUS_IN_WORK = 'in_work';
     public const string STATUS_CANCELLED = 'cancelled';
 
     private PDO $pdo;
@@ -209,6 +210,46 @@ readonly class ChatRequestRepository
         return $row ? $this->normalizeRow($row) : null;
     }
 
+    public function getByDealIdAndType(int|string $dealId, string $type): ?array
+    {
+        $sql = sprintf(
+            'SELECT
+            id,
+            chat_id,
+            user_id,
+            type,
+            status,
+            current_step,
+            crm_entity_type,
+            crm_entity_id,
+            phone,
+            payload,
+            error_message,
+            created_at,
+            updated_at,
+            completed_at,
+            cancelled_at
+        FROM %s
+        WHERE crm_entity_id = :entity_id
+          AND crm_entity_type = :entity_type
+          AND type = :type
+        ORDER BY created_at DESC
+        LIMIT 1',
+            self::TABLE
+        );
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([
+            'entity_id' => $dealId,
+            'entity_type' => 'DEAL',
+            'type' => $type,
+        ]);
+
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        return $row ? $this->normalizeRow($row) : null;
+    }
+
     public function setPhone(int $requestId, string $phone): void
     {
         $sql = sprintf(
@@ -314,6 +355,23 @@ readonly class ChatRequestRepository
             'status' => self::STATUS_SENT,
             'crm_entity_id' => $crmEntityId,
             'crm_entity_type' => $crmEntityType,
+        ]);
+    }
+
+    public function markInWork(int $requestId): void {
+        $sql = sprintf(
+            'UPDATE %s
+            SET status = :status,
+                updated_at = NOW(),
+                error_message = NULL
+            WHERE id = :id',
+            self::TABLE
+        );
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([
+            'id' => $requestId,
+            'status' => self::STATUS_IN_WORK,
         ]);
     }
 
