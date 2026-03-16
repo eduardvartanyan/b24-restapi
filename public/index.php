@@ -68,9 +68,12 @@ try {
         // https://review.avarcomf.ru/test
         case '/test':
             echo '<pre>';
-            $daData = $container->get(DaDataService::class);
-            $address = $daData->cleanAddress('ул ленина 12');
-            var_dump($address);
+            $result = mb_strtoupper(str_replace(
+                    ['г Иркутск', ' ул ', ', д '],
+                    ['г. Иркутск', ' ул. ', ' '],
+                    'г Иркутск, ул Степана Разина, д 12'
+            ));
+            var_dump($result);
 
     }
 } catch (Throwable $e) {

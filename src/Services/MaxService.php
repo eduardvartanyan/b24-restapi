@@ -99,6 +99,7 @@ readonly class MaxService
 
             $rid = $update['payload'] ?? null;
             $contactId = $rid ? $this->b24->getContactIdByRid((string)$rid) : null;
+            // TODO: Если рид нету, то пробовать найти чатид в Б24
 
             Logger::info('Max webhook: bot_started', [
                 'chat_id'    => $update['chat_id'] ?? null,
@@ -245,6 +246,7 @@ readonly class MaxService
                             $payload['contact'] = $contact;
 
                             $this->chatRequestRepository->setPayload($dtpRequest['id'], $payload);
+                            $this->chatRequestRepository->setPhone($dtpRequest['id'], $contact['phone']);
 
                             $dtpInfo = $this->printDtpCard($payload);
 
@@ -315,6 +317,7 @@ readonly class MaxService
                         $payload = $dtpRequest['payload'];
                         $payload['contact']['phone'] = $update['message']['body']['text'];
                         $this->chatRequestRepository->setPayload($dtpRequest['id'], $payload);
+                        $this->chatRequestRepository->setPhone($dtpRequest['id'], $update['message']['body']['text']);
 
                         $dtpInfo = $this->printDtpCard($payload);
 
@@ -364,6 +367,7 @@ readonly class MaxService
             $userId = $update['message']['recipient']['user_id'];
             $requestId = $this->chatRequestRepository->create($chatId, 'dtp');
 
+            $this->chatStateRepository->clearState($chatId);
             $this->chatStateRepository->saveStateForMinutes(
                 $chatId,
                 'dtp.waiting_address',
@@ -563,13 +567,37 @@ readonly class MaxService
 
         $this->maxBot->action('request_confirmed', function() {
             $update = PHPMaxBot::$currentUpdate;
+            $chatId = $update['message']['recipient']['chat_id'];
+            $dtpRequest = $this->chatRequestRepository->getActiveByChatAndType($chatId, 'dtp');
+            $contactId = $this->b24->getContactIdByMaxChatId($chatId);
 
-            return Bot::answerOnCallback($update['callback']['callback_id'], [
-                'message' => [
-                    'text' => $this->messages->get('message__dtp_request_created'),
-                    'attachments' => [],
-                ]
-            ]);
+            if ($dealId = $this->b24->addDeal([
+                'TYPE_ID' => 'SALE',
+                'STAGE_ID' => 'C14:NEW',
+                'CATEGORY_ID' => 14,
+                'CONTACT_IDS' => [$contactId],
+                'SOURCE_ID' => '1|MAX',
+                'COMMENTS' => $this->printDtpCard($dtpRequest['payload']),
+                'ORIGIN_ID' => $dtpRequest['id'],
+                'UF_CRM_1645478185' => $this->normalizeAddress($dtpRequest['payload']['location']['address']),
+            ])) {
+                $this->chatRequestRepository->markSent(
+                    $dtpRequest['id'],
+                    $dealId,
+                    'DEAL'
+                );
+
+                $this->chatStateRepository->clearState($chatId);
+
+                return Bot::answerOnCallback($update['callback']['callback_id'], [
+                    'message' => [
+                        'text' => $this->messages->get('message__dtp_request_created'),
+                        'attachments' => [],
+                    ]
+                ]);
+            }
+
+            return null;
         });
     }
 
@@ -622,5 +650,14 @@ readonly class MaxService
         } catch (Throwable $e) {
             return '';
         }
+    }
+    
+    private function normalizeAddress(string $address): string
+    {
+        return mb_strtoupper(str_replace(
+            ['г Иркутск', ' ул ', ', д '],
+            ['г. Иркутск', ' ул. ', ' '],
+            $address
+        ));
     }
 }
