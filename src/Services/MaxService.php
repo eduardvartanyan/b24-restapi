@@ -96,13 +96,12 @@ readonly class MaxService
     {
         $this->maxBot->on('bot_started', function () {
             $update = PHPMaxBot::$currentUpdate;
-
+            $chatId = $update['chat_id'];
             $rid = $update['payload'] ?? null;
-            $contactId = $rid ? $this->b24->getContactIdByRid((string)$rid) : null;
-            // TODO: Если рид нету, то пробовать найти чатид в Б24
+            $contactId = $rid ? $this->b24->getContactIdByRid($rid) : $this->b24->getContactIdByMaxChatId($chatId);
 
             Logger::info('Max webhook: bot_started', [
-                'chat_id'    => $update['chat_id'] ?? null,
+                'chat_id'    => $chatId,
                 'payload'    => $rid,
                 'contact_id' => $contactId,
             ]);
