@@ -257,6 +257,24 @@ class B24Service
         return null;
     }
 
+    public function addContact(array $fields): ?int
+    {
+        try {
+            $result = $this->b24->getCRMScope()->contact()->add($fields);
+
+            return $result->getId();
+        } catch (Throwable $e) {
+            Logger::error('Ошибка при добавлении контакта', [
+                'file'    => $e->getFile(),
+                'line'    => $e->getLine(),
+                'message' => $e->getMessage(),
+                'data'    => $fields,
+            ]);
+        }
+
+        return null;
+    }
+
     public function addDynamicItem(int $entityTypeId, array $fields): ?int
     {
         try {

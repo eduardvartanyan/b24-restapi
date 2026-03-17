@@ -584,7 +584,19 @@ readonly class MaxService
             $contactId = $payload['contact']['id'];
 
             if (!$contactId) {
+                $contact = $payload['contact'] ?? [];
+                $contactId = $this->b24->addContact([
+                    'NAME' => $contact['name'] ?? '',
+                    'PHONE' => [[
+                        'VALUE' => $contact['phone'] ?? '',
+                        'VALUE_TYPE' => 'WORK',
+                    ]],
+                ]);
 
+                if ($contactId) {
+                    $payload['contact']['id'] = $contactId;
+                    $this->chatRequestRepository->setPayload($dtpRequest['id'], $payload);
+                }
             }
 
             if ($dealId = $this->b24->addDeal([
