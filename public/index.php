@@ -74,12 +74,10 @@ try {
         // https://review.avarcomf.ru/test
         case '/test':
             echo '<pre>';
-            $result = mb_strtoupper(str_replace(
-                    ['г Иркутск', ' ул ', ', д '],
-                    ['г. Иркутск', ' ул. ', ' '],
-                    'г Иркутск, ул Степана Разина, д 12'
-            ));
-            var_dump($result);
+            $b24 = $container->get(B24Service::class);
+            $contactId = $b24->getContactIdByPhone('+79027611122');
+            var_dump($contactId);
+            break;
 
     }
 } catch (Throwable $e) {

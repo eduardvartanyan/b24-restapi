@@ -92,8 +92,6 @@ readonly class MaxService
         }
     }
 
-    // TODO: Настроить добавление контакта в пэйлоад заявки
-
     private function registerHandlers(): void
     {
         $this->maxBot->on('bot_started', function () {
@@ -143,14 +141,13 @@ readonly class MaxService
                                 $attachment['latitude'],
                                 $attachment['longitude']
                             )) {
-
-                                $this->chatRequestRepository->setPayload($dtpRequest['id'], [
-                                    'location' => [
-                                        'lat' => $attachment['latitude'],
-                                        'lon' => $attachment['longitude'],
-                                        'address' => $address,
-                                    ]
-                                ]);
+                                $payload = $dtpRequest['payload'];
+                                $payload['location'] = [
+                                    'lat' => $attachment['latitude'],
+                                    'lon' => $attachment['longitude'],
+                                    'address' => $address,
+                                ];
+                                $this->chatRequestRepository->setPayload($dtpRequest['id'], $payload);
 
                                 return Bot::sendMessage(
                                     $this->messages->get('message__dtp_confirm_address') . $address,
@@ -191,9 +188,9 @@ readonly class MaxService
                         $address = $this->daData->cleanAddress($update['message']['body']['text']);
 
                         if ($address) {
-                            $this->chatRequestRepository->setPayload($dtpRequest['id'], [
-                                'location' => ['address' => $address]
-                            ]);
+                            $payload = $dtpRequest['payload'];
+                            $payload['location'] = ['address' => $address];
+                            $this->chatRequestRepository->setPayload($dtpRequest['id'], $payload);
 
                             return Bot::sendMessage(
                                 $this->messages->get('message__dtp_confirm_address') . $address,
@@ -241,15 +238,18 @@ readonly class MaxService
                                 ]
                             );
 
-                            $contact = $this->parseVCard($attachment['payload']['vcf_info']);
-
                             $payload = $dtpRequest['payload'];
+                            $contact = $this->parseVCard($attachment['payload']['vcf_info']);
+                            $phone = $this->normalizePhone($contact['phone']);
+                            $contact['id'] = $payload['contact']['id'] ?? $this->b24->getContactIdByPhone($phone);
                             $payload['contact'] = $contact;
+
+                            if ($contact['id']) {
+                                $this->b24->setMaxChatId($contact['id'], $chatId);
+                            }
 
                             $this->chatRequestRepository->setPayload($dtpRequest['id'], $payload);
                             $this->chatRequestRepository->setPhone($dtpRequest['id'], $contact['phone']);
-
-                            // TODO: Пытаться найти контакт по номеру телефона
 
                             $dtpInfo = $this->printDtpCard($payload);
 
@@ -319,9 +319,13 @@ readonly class MaxService
                         );
                         $payload = $dtpRequest['payload'];
                         $payload['contact']['phone'] = $update['message']['body']['text'];
-                        $this->chatRequestRepository->setPayload($dtpRequest['id'], $payload);
 
-                        // TODO: Попытаться найти контакт для заявки по номеру телефона
+                        $payload = $dtpRequest['payload'];
+                        $phone = $this->normalizePhone($update['message']['body']['text']);
+                        $contactId = $payload['contact']['id'] ?? $this->b24->getContactIdByPhone($phone);
+                        $payload['contact']['id'] = $contactId;
+                        $payload['contact']['phone'] = $phone;
+                        $this->chatRequestRepository->setPayload($dtpRequest['id'], $payload);
 
                         $dtpInfo = $this->printDtpCard($payload);
 
@@ -343,9 +347,6 @@ readonly class MaxService
                     }
                 }
             }
-
-//            Bot::sendAction($chatId, 'typing_on');
-//            sleep(1);
 
             return null;
         });
@@ -369,7 +370,13 @@ readonly class MaxService
             $update = PHPMaxBot::$currentUpdate;
             $chatId = $update['message']['recipient']['chat_id'];
             $userId = $update['message']['recipient']['user_id'];
+            $contactId = $this->b24->getContactIdByMaxChatId($chatId);
             $requestId = $this->chatRequestRepository->create($chatId, 'dtp');
+            $this->chatRequestRepository->setPayload($requestId, [
+                'contact' => [
+                    'id' => $contactId,
+                ],
+            ]);
 
             $this->chatStateRepository->clearState($chatId);
             $this->chatStateRepository->saveStateForMinutes(
@@ -573,9 +580,12 @@ readonly class MaxService
             $update = PHPMaxBot::$currentUpdate;
             $chatId = $update['message']['recipient']['chat_id'];
             $dtpRequest = $this->chatRequestRepository->getActiveByChatAndType($chatId, 'dtp');
-            $contactId = $this->b24->getContactIdByMaxChatId($chatId);
+            $payload = $dtpRequest['payload'];
+            $contactId = $payload['contact']['id'];
 
-            // TODO: Добавить создание контакта, если его еще нет в пэйлоад
+            if (!$contactId) {
+
+            }
 
             if ($dealId = $this->b24->addDeal([
                 'TYPE_ID' => 'SALE',
@@ -713,3 +723,7 @@ readonly class MaxService
         return '+7' . substr(str_replace(['(', ')', '-', ' '], '', $phone), -10);
     }
 }
+
+
+//            Bot::sendAction($chatId, 'typing_on');
+//            sleep(1);

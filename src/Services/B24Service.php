@@ -233,6 +233,30 @@ class B24Service
         return null;
     }
 
+    public function getContactIdByPhone(string $phone): ?int
+    {
+        try {
+            $result = $this->b24->getCRMScope()->contact()->list(
+                [],
+                ['PHONE' => $phone],
+                ['ID'],
+                0
+            );
+            $contacts = $result->getContacts();
+
+            return $contacts[0]->ID;
+        } catch (Throwable $e) {
+            Logger::error('Ошибка при получении ID контакта', [
+                'file'    => $e->getFile(),
+                'line'    => $e->getLine(),
+                'message' => $e->getMessage(),
+                'data'    => $phone
+            ]);
+        }
+
+        return null;
+    }
+
     public function addDynamicItem(int $entityTypeId, array $fields): ?int
     {
         try {
