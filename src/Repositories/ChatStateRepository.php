@@ -3,7 +3,9 @@ declare(strict_types=1);
 
 namespace App\Repositories;
 
+use App\Helpers\Logger;
 use App\Support\Database;
+use Exception;
 use PDO;
 use DateTimeImmutable;
 use DateInterval;
@@ -153,18 +155,27 @@ readonly class ChatStateRepository
         ]);
     }
 
-    public function clearState(int|string $chatId, string $type): void
+    public function clearState(int|string $chatId): void
     {
-        $sql = "DELETE FROM chat_states 
-            WHERE chat_id = :chat_id
-                AND type = :type;
-       ";
+        try {
+            $sql = "DELETE FROM chat_states 
+                WHERE chat_id = :chat_id;
+            ";
 
-        $stmt = $this->pdo->prepare($sql);
-        $stmt->execute([
-            'chat_id' => $chatId,
-            'type' => $type,
-        ]);
+            $stmt = $this->pdo->prepare($sql);
+            $stmt->execute([
+                'chat_id' => $chatId,
+            ]);
+        } catch (Exception $e) {
+            Logger::error('[ChatStateRepository clearState] Error clearing chat state: ]', [
+                'file'    => $e->getFile(),
+                'line'    => $e->getLine(),
+                'message' => $e->getMessage(),
+                'data'    => [
+                    'chat_id' => $chatId,
+                ]
+            ]);
+        }
     }
 
     public function clearExpiredStates(): int

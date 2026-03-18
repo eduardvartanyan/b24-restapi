@@ -51,11 +51,9 @@ readonly class MaxService
             ]);
 
             $this->maxBot->command('menu', function() {
-                $update = PHPMaxBot::$currentUpdate;
-                $contactId = $this->b24->getContactIdByMaxChatId($update['message']['recipient']['chat_id']);
-                $menu = $this->getMenu($contactId);
-
-                return Bot::sendMessage($this->messages->get('message__menu'), ['attachments' => [$menu]]);
+                return Bot::sendMessage($this->messages->get('message__menu'), [
+                    'attachments' => [$this->getMenu()]
+                ]);
             });
 
             $this->maxBot->start([
@@ -314,8 +312,6 @@ readonly class MaxService
                                 'request_id' => $dtpRequest['id'],
                             ]
                         );
-                        $payload = $dtpRequest['payload'];
-                        $payload['contact']['phone'] = $update['message']['body']['text'];
 
                         $payload = $dtpRequest['payload'];
                         $phone = $this->normalizePhone($update['message']['body']['text']);
@@ -363,6 +359,28 @@ readonly class MaxService
                 }
             }
 
+            if ($chatState == 'ask.waiting_question') {
+                if (
+                    isset($update['message']['body']['text'])
+                    && $update['message']['body']['text'] !== ''
+                ) {
+                    if ($request = $this->chatRequestRepository->getActiveByChatAndType($chatId, 'ask')) {
+                        Bot::sendAction($chatId, 'typing_on');
+                        $payload = $request['payload'];
+                        $payload['question'] = trim($update['message']['body']['text']);
+                        $this->chatRequestRepository->setPayload($request['id'], $payload);
+
+                        // TODO: Создание задачи из контакта
+                        $taskId = 0;
+
+                        $this->chatRequestRepository->markSent($request['id'], $taskId, 'TASK');
+                        $this->chatStateRepository->clearState($chatId);
+                        sleep(1);
+                        return Bot::sendMessage('Ваш вопрос отправлен профильному специалисту. Ожидайте ответ');
+                    }
+                }
+            }
+
             return null;
         });
     }
@@ -380,7 +398,7 @@ readonly class MaxService
             ]);
         });
 
-        $this->maxBot->action('dtp', function() {
+        $this->maxBot->action('request_dtp', function() {
             $update = PHPMaxBot::$currentUpdate;
             $chatId = $update['message']['recipient']['chat_id'];
             $userId = $update['message']['recipient']['user_id'];
@@ -392,7 +410,7 @@ readonly class MaxService
                 ],
             ]);
 
-            $this->chatStateRepository->clearState($chatId, 'dtp');
+            $this->chatStateRepository->clearState($chatId);
             $this->chatStateRepository->saveStateForMinutes(
                 $chatId,
                 'dtp.waiting_address',
@@ -629,7 +647,7 @@ readonly class MaxService
                     'DEAL'
                 );
 
-                $this->chatStateRepository->clearState($chatId, 'dtp');
+                $this->chatStateRepository->clearState($chatId);
 
                 return Bot::answerOnCallback($update['callback']['callback_id'], [
                     'message' => [
@@ -654,7 +672,7 @@ readonly class MaxService
                     ]
                 ];
             } else {
-                $this->chatStateRepository->clearState($chatId, 'status');
+                $this->chatStateRepository->clearState($chatId);
                 $this->chatStateRepository->saveStateForMinutes(
                     $chatId,
                     'status.waiting_contact',
@@ -672,6 +690,139 @@ readonly class MaxService
                 ];
             }
             return Bot::answerOnCallback($update['callback']['callback_id'], $data);
+        });
+
+        $this->maxBot->action('ask__start', function() {
+            $update = PHPMaxBot::$currentUpdate;
+            $chatId = $update['message']['recipient']['chat_id'];
+            $requestId = $this->chatRequestRepository->create($chatId, 'ask');
+            $this->chatRequestRepository->setPayload($requestId, [
+                'contact' => ['id' => $this->b24->getContactIdByMaxChatId($chatId)],
+            ]);
+            $this->chatStateRepository->clearState($chatId);
+            Logger::info('[MaxService registerAction] ask__start', [
+                'chat_id' => $chatId,
+                'request_id' => $requestId,
+            ]);
+            $this->chatStateRepository->saveStateForMinutes(
+                $chatId,
+                'ask.waiting_theme',
+                30,
+                $update['message']['recipient']['user_id'],
+                context: [
+                    'type' => 'ask',
+                    'request_id' => $requestId,
+                ]
+            );
+            return Bot::answerOnCallback($update['callback']['callback_id'], [
+                'message' => [
+                    'text' => 'По какой теме ваш вопрос?',
+                    'attachments' => [Keyboard::inlineKeyboard([
+                        [Keyboard::callback('ДТП', 'ask__dtp')],
+                        [Keyboard::callback('Юридические услуги', 'ask__law')],
+                        [Keyboard::callback('Экспертиза', 'ask__expertise')],
+                    ])]
+                ]
+            ]);
+        });
+
+        $this->maxBot->action('ask__dtp', function() {
+            $update = PHPMaxBot::$currentUpdate;
+            $chatId = $update['message']['recipient']['chat_id'];
+            if ($request = $this->chatRequestRepository->getActiveByChatAndType($chatId, 'ask')) {
+                $this->chatStateRepository->saveStateForMinutes(
+                    $chatId,
+                    'ask.waiting_question',
+                    30,
+                    $update['message']['recipient']['user_id'],
+                    [
+                        'type' => 'ask',
+                        'request_id' => $request['id'],
+                    ]
+                );
+                $payload = $request['payload'];
+                $payload['theme'] = 'ДТП';
+                $this->chatRequestRepository->setPayload($request['id'], $payload);
+                return Bot::answerOnCallback($update['callback']['callback_id'], [
+                    'message' => [
+                        'text' => 'Отправьте в сообщении свой вопрос',
+                        'attachments' => [],
+                    ]
+                ]);
+            } else {
+                return Bot::answerOnCallback($update['callback']['callback_id'], [
+                    'message' => [
+                        'text' => 'Что-то пошло не так :/ начните заново',
+                        'attachments' => [$this->getMenu()],
+                    ]
+                ]);
+            }
+        });
+
+        $this->maxBot->action('ask__law', function() {
+            $update = PHPMaxBot::$currentUpdate;
+            $chatId = $update['message']['recipient']['chat_id'];
+            if ($request = $this->chatRequestRepository->getActiveByChatAndType($chatId, 'ask')) {
+                $this->chatStateRepository->saveStateForMinutes(
+                    $chatId,
+                    'ask.waiting_question',
+                    30,
+                    $update['message']['recipient']['user_id'],
+                    [
+                        'type' => 'ask',
+                        'request_id' => $request['id'],
+                    ]
+                );
+                $payload = $request['payload'];
+                $payload['theme'] = 'Юридические услуги';
+                $this->chatRequestRepository->setPayload($request['id'], $payload);
+                return Bot::answerOnCallback($update['callback']['callback_id'], [
+                    'message' => [
+                        'text' => 'Отправьте в сообщении свой вопрос',
+                        'attachments' => [],
+                    ]
+                ]);
+            } else {
+                return Bot::answerOnCallback($update['callback']['callback_id'], [
+                    'message' => [
+                        'text' => 'Что-то пошло не так :/ начните заново',
+                        'attachments' => [$this->getMenu()],
+                    ]
+                ]);
+            }
+        });
+
+        $this->maxBot->action('ask__expertise', function() {
+            $update = PHPMaxBot::$currentUpdate;
+            $chatId = $update['message']['recipient']['chat_id'];
+            if ($request = $this->chatRequestRepository->getActiveByChatAndType($chatId, 'ask')) {
+                $this->chatStateRepository->saveStateForMinutes(
+                    $chatId,
+                    'ask.waiting_question',
+                    30,
+                    $update['message']['recipient']['user_id'],
+                    [
+                        'type' => 'ask',
+                        'request_id' => $request['id'],
+                    ]
+                );
+                $payload = $request['payload'];
+                $payload['theme'] = 'Экспертиза';
+                $this->chatRequestRepository->setPayload($request['id'], $payload);
+                return Bot::answerOnCallback($update['callback']['callback_id'], [
+                    'message' => [
+                        'text' => 'Отправьте в сообщении свой вопрос',
+                        'attachments' => [],
+                    ]
+                ]);
+            } else {
+                return Bot::answerOnCallback($update['callback']['callback_id'], [
+                    'message' => [
+                        'text' => 'Что-то пошло не так :/ начните заново',
+                        'attachments' => [$this->getMenu()],
+                    ]
+                ]);
+            }
         });
     }
 
@@ -718,13 +869,11 @@ readonly class MaxService
 
     private function getMenu(): array
     {
-        $keyboard = Keyboard::inlineKeyboard([
-            [Keyboard::callback($this->messages->get('button_label__dtp'), 'dtp')],
+        return Keyboard::inlineKeyboard([
+            [Keyboard::callback($this->messages->get('button_label__dtp'), 'request_dtp')],
             [Keyboard::callback($this->messages->get('button_label__status'), 'status')],
-            [Keyboard::callback($this->messages->get('button_label__ask'), 'ask')],
+            [Keyboard::callback($this->messages->get('button_label__ask'), 'ask__start')],
         ]);
-
-        return $keyboard;
     }
 
     private function parseVCard(string $vcard): array
