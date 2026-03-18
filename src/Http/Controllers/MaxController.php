@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Helpers\Logger;
 use App\Services\MaxService;
 
 readonly class MaxController
@@ -12,6 +13,10 @@ readonly class MaxController
     public function handle(): void
     {
         $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+
+        Logger::info('[MaxController->handle]', [
+            'method' => $method,
+        ]);
 
         if ($method !== 'POST') {
             http_response_code(405);

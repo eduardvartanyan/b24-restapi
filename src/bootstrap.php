@@ -16,6 +16,7 @@ use App\Services\OneCService;
 use App\Services\ReviewService;
 use App\Services\TgService;
 use App\Support\Container;
+use App\Support\MessageCatalog;
 use Bitrix24\SDK\Services\ServiceBuilder;
 use Bitrix24\SDK\Services\ServiceBuilderFactory;
 use Dotenv\Dotenv;
@@ -51,7 +52,8 @@ $container->set(MaxService::class,              fn() => new MaxService(
     $container->get(PHPMaxBot::class),
     $container->get(ChatStateRepository::class),
     $container->get(ChatRequestRepository::class),
-    $container->get(DaDataService::class)
+    $container->get(DaDataService::class),
+    new MessageCatalog(__DIR__ . '/../Support/Messages/chatbot.php')
 ));
 $container->set(PHPMaxBot::class,               fn() => new PHPMaxBot($_ENV['MAX_BOT_TOKEN']));
 $container->set(ChatStateRepository::class,     fn() => new ChatStateRepository());

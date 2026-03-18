@@ -7,13 +7,7 @@ use App\Http\Controllers\MaxController;
 use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\TgController;
 use App\Http\Middleware;
-use App\Repositories\ChatRequestRepository;
-use App\Services\B24Service;
-use App\Services\DaDataService;
-use App\Services\DailyImportService;
 use App\Support\Container;
-use Bitrix24\SDK\Services\ServiceBuilderFactory;
-use PHPMaxBot;
 
 require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/../src/bootstrap.php';
@@ -61,6 +55,7 @@ try {
 
         // https://max.ru/id381250859808_bot?start=96147618
         case '/api/max':
+            Logger::info('[index.php] /api/max');
             $maxController = $container->get(MaxController::class);
             $maxController->handle();
             break;
@@ -74,9 +69,6 @@ try {
         // https://review.avarcomf.ru/test
         case '/test':
             echo '<pre>';
-            $b24 = $container->get(B24Service::class);
-            $contactId = $b24->getContactIdByPhone('+79027611122');
-            var_dump($contactId);
             break;
 
     }

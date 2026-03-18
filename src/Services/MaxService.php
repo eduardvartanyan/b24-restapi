@@ -16,17 +16,14 @@ use Throwable;
 
 readonly class MaxService
 {
-    private MessageCatalog $messages;
-
     public function __construct(
         private B24Service $b24,
         private PHPMaxBot $maxBot,
         private ChatStateRepository $chatStateRepository,
         private ChatRequestRepository $chatRequestRepository,
         private DaDataService $daData,
-    ) {
-        $this->messages = new MessageCatalog(__DIR__ . '/../Support/Messages/chatbot.php');
-    }
+        private MessageCatalog $messages
+    ) { }
 
     public function handle(string $raw): array
     {
@@ -37,7 +34,7 @@ readonly class MaxService
             return ['status' => 400, 'body' => 'Invalid update'];
         }
 
-        Logger::info('Max webhook: incoming update', [
+        Logger::info('[MaxService->handle] incoming update', [
             'update_type' => $update['update_type'] ?? null,
             'update'     => $update,
         ]);
@@ -100,7 +97,7 @@ readonly class MaxService
             $rid = $update['payload'] ?? null;
             $contactId = $rid ? $this->b24->getContactIdByRid($rid) : $this->b24->getContactIdByMaxChatId($chatId);
 
-            Logger::info('Max webhook: bot_started', [
+            Logger::info('[MaxService->registerHandlers] bot_started', [
                 'chat_id'    => $chatId,
                 'payload'    => $rid,
                 'contact_id' => $contactId,
@@ -627,6 +624,14 @@ readonly class MaxService
 
             return null;
         });
+
+        $this->maxBot->action('status', function() {
+            $update = PHPMaxBot::$currentUpdate;
+            $chatId = $update['message']['recipient']['chat_id'];
+            $contactId = $this->b24->getContactIdByMaxChatId($chatId);
+            Bot::sendAction($chatId, 'typing_on');
+            Bot::sendMessage($chatId, $this->b24->getDealsReportByContactId($contactId));
+        });
     }
 
     public function markDtpRequestInWork(int|string $dealId, string $commissarName, string $commissarPhone): array
@@ -735,7 +740,3 @@ readonly class MaxService
         return '+7' . substr(str_replace(['(', ')', '-', ' '], '', $phone), -10);
     }
 }
-
-
-//            Bot::sendAction($chatId, 'typing_on');
-//            sleep(1);
