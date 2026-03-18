@@ -188,31 +188,50 @@ class B24Service
             '14' => 'Вызов аварийного комиссара',
         ];
         $statuses = [
-            'C14:NEW' => 'Обрабатываем заявку',
-            'C14:PREPARATION' => 'В работе у аварийного комиссара',
-            'C14:UC_06USC6' => 'ДТП оформлено',
-            'C14:PREPAYMENT_INVOIC' => 'Оформляем документы для ГАИ',
-            'C14:EXECUTING' => 'Передаем документы в ГАИ',
-            'C14:FINAL_INVOICE' => 'Ожидаем документы из ГАИ',
-            'C14:UC_RT6JEL' => 'Ожидаем документы из ГАИ',
+            'C14:NEW' => [
+                'emoji' => '⏳ ',
+                'text' => 'Обрабатываем заявку'
+            ],
+            'C14:PREPARATION' => [
+                'emoji' => '📋 ',
+                'text' => 'В работе у аварийного комиссара'
+            ],
+            'C14:UC_06USC6' => [
+                'emoji' => '✅ ',
+                'text' => 'ДТП оформлено'
+            ],
+            'C14:PREPAYMENT_INVOIC' => [
+                'emoji' => '✍️ ',
+                'text' => 'Оформляем документы для ГАИ'
+            ],
+            'C14:EXECUTING' => [
+                'emoji' => '📨 ',
+                'text' => 'Передаем документы в ГАИ'
+            ],
+            'C14:FINAL_INVOICE' => [
+                'emoji' => '👀 ',
+                'text' => 'Ожидаем документы из ГАИ'
+            ],
+            'C14:UC_RT6JEL' => [
+                'emoji' => '👀 ',
+                'text' => 'Ожидаем документы из ГАИ'
+            ],
         ];
 
         try {
-
             foreach ($this->b24->getCRMScope()->deal()->list(
                 [],
                 [
-                    'CONTACT' => $contactId,
+                    'CONTACT_ID' => $contactId,
                     'CATEGORY_ID' => ['14'],
                     'STAGE_ID' => ['C14:NEW', 'C14:PREPARATION', 'C14:UC_06USC6', 'C14:PREPAYMENT_INVOIC',
                         'C14:EXECUTING', 'C14:FINAL_INVOICE', 'C14:UC_RT6JEL'],
                 ],
                 ['*'],
             )->getDeals() as $deal) {
-                $report .= 'Статус заявки № ' . $deal->ID . ':' . PHP_EOL;
-                $report .= 'Тип заявки — ' . $types[$deal->CATEGORY_ID] . '.' . PHP_EOL;
-                $report .= 'Дата создания заявки — ' . $deal->DATE_CREATE->format('d.m.Y') . '.' . PHP_EOL;
-                $report .= 'Статус — ' . $statuses[$deal->STAGE_ID] . '.' . PHP_EOL;
+                $report .= $statuses[$deal->STAGE_ID]['emoji'] . 'Заявка № ' . $deal->ID . ' от '
+                    . $deal->DATE_CREATE->format('d.m.Y') . ' — ' . $types[$deal->CATEGORY_ID] . PHP_EOL;
+                $report .= 'Статус: ' . $statuses[$deal->STAGE_ID]['text'] . PHP_EOL;
                 $report .= PHP_EOL;
             }
         } catch (Throwable $e) {
@@ -229,6 +248,11 @@ class B24Service
         if (!$report) {
             $report = 'Активных заявок не найдено';
         }
+
+        Logger::info('[B24Service->getDealsReportByContactId]', [
+            'contactId' => $contactId,
+            'report'    => $report,
+        ]);
 
         return $report;
     }

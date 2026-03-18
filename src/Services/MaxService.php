@@ -630,7 +630,12 @@ readonly class MaxService
             $chatId = $update['message']['recipient']['chat_id'];
             $contactId = $this->b24->getContactIdByMaxChatId($chatId);
             Bot::sendAction($chatId, 'typing_on');
-            Bot::sendMessage($chatId, $this->b24->getDealsReportByContactId($contactId));
+            return Bot::answerOnCallback($update['callback']['callback_id'], [
+                'message' => [
+                    'text' => $this->b24->getDealsReportByContactId($contactId),
+                    'attachments' => [],
+                ]
+            ]);
         });
     }
 

@@ -14,10 +14,6 @@ readonly class MaxController
     {
         $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
-        Logger::info('[MaxController->handle]', [
-            'method' => $method,
-        ]);
-
         if ($method !== 'POST') {
             http_response_code(405);
             echo 'Method Not Allowed';
