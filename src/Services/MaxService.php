@@ -103,7 +103,7 @@ readonly class MaxService
                 'contact_id' => $contactId,
             ]);
 
-            $menu = $this->getMenu($contactId);
+            $menu = $this->getMenu();
 
             if (isset($contactId)) {
                 $this->b24->setMaxChatId($contactId, $update['chat_id']);
@@ -345,6 +345,24 @@ readonly class MaxService
                 }
             }
 
+            if ($chatState == 'status.waiting_contact') {
+                if (
+                    isset($update['message']['body']['attachments'])
+                    && is_array($update['message']['body']['attachments'])
+                    && count($update['message']['body']['attachments'])
+                ) {
+                    $attachment = $update['message']['body']['attachments'][0];
+                    if ($attachment['type'] === 'contact') {
+                        $contact = $this->parseVCard($attachment['payload']['vcf_info']);
+                        $contact['id'] = $this->b24->getContactIdByPhone($this->normalizePhone($contact['phone']));
+                        if ($contact['id']) {
+                            $this->b24->setMaxChatId($contact['id'], $chatId);
+                        }
+                        return Bot::sendMessage($this->b24->getDealsReportByContactId($contact['id']));
+                    }
+                }
+            }
+
             return null;
         });
     }
@@ -353,12 +371,11 @@ readonly class MaxService
     {
         $this->maxBot->action('menu', function() {
             $update = PHPMaxBot::$currentUpdate;
-            $contactId = $this->b24->getContactIdByMaxChatId($update['message']['recipient']['chat_id']);
 
             return Bot::answerOnCallback($update['callback']['callback_id'], [
                 'message' => [
                     'text' => $this->messages->get('message__menu'),
-                    'attachments' => [$this->getMenu($contactId)]
+                    'attachments' => [$this->getMenu()]
                 ]
             ]);
         });
@@ -375,7 +392,7 @@ readonly class MaxService
                 ],
             ]);
 
-            $this->chatStateRepository->clearState($chatId);
+            $this->chatStateRepository->clearState($chatId, 'dtp');
             $this->chatStateRepository->saveStateForMinutes(
                 $chatId,
                 'dtp.waiting_address',
@@ -612,7 +629,7 @@ readonly class MaxService
                     'DEAL'
                 );
 
-                $this->chatStateRepository->clearState($chatId);
+                $this->chatStateRepository->clearState($chatId, 'dtp');
 
                 return Bot::answerOnCallback($update['callback']['callback_id'], [
                     'message' => [
@@ -628,14 +645,33 @@ readonly class MaxService
         $this->maxBot->action('status', function() {
             $update = PHPMaxBot::$currentUpdate;
             $chatId = $update['message']['recipient']['chat_id'];
-            $contactId = $this->b24->getContactIdByMaxChatId($chatId);
             Bot::sendAction($chatId, 'typing_on');
-            return Bot::answerOnCallback($update['callback']['callback_id'], [
-                'message' => [
-                    'text' => $this->b24->getDealsReportByContactId($contactId),
-                    'attachments' => [],
-                ]
-            ]);
+            if ($contactId = $this->b24->getContactIdByMaxChatId($chatId)) {
+                $data = [
+                    'message' => [
+                        'text' => $this->b24->getDealsReportByContactId($contactId),
+                        'attachments' => [],
+                    ]
+                ];
+            } else {
+                $this->chatStateRepository->clearState($chatId, 'status');
+                $this->chatStateRepository->saveStateForMinutes(
+                    $chatId,
+                    'status.waiting_contact',
+                    30,
+                    $update['message']['recipient']['user_id'],
+                    context: ['type' => 'status']
+                );
+                $data = [
+                    'message' => [
+                        'text' => '',
+                        'attachments' => [Keyboard::inlineKeyboard([
+                            [Keyboard::requestContact($this->messages->get('button_label__contact'))],
+                        ])],
+                    ],
+                ];
+            }
+            return Bot::answerOnCallback($update['callback']['callback_id'], $data);
         });
     }
 
@@ -680,20 +716,14 @@ readonly class MaxService
         }
     }
 
-    private function getMenu(?int $contactId): array
+    private function getMenu(): array
     {
-        if (isset($contactId)) {
-            $keyboard = Keyboard::inlineKeyboard([
-                [Keyboard::callback($this->messages->get('button_label__dtp'), 'dtp')],
-                [Keyboard::callback($this->messages->get('button_label__status'), 'status')],
-                [Keyboard::callback($this->messages->get('button_label__ask'), 'ask')],
-            ]);
-        } else {
-            $keyboard = Keyboard::inlineKeyboard([
-                [Keyboard::callback($this->messages->get('button_label__dtp'), 'dtp')],
-                [Keyboard::callback($this->messages->get('button_label__ask'), 'ask')],
-            ]);
-        }
+        $keyboard = Keyboard::inlineKeyboard([
+            [Keyboard::callback($this->messages->get('button_label__dtp'), 'dtp')],
+            [Keyboard::callback($this->messages->get('button_label__status'), 'status')],
+            [Keyboard::callback($this->messages->get('button_label__ask'), 'ask')],
+        ]);
+
         return $keyboard;
     }
 

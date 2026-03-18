@@ -153,13 +153,17 @@ readonly class ChatStateRepository
         ]);
     }
 
-    public function clearState(int|string $chatId): void
+    public function clearState(int|string $chatId, string $type): void
     {
-        $sql = "DELETE FROM chat_states WHERE chat_id = :chat_id";
+        $sql = "DELETE FROM chat_states 
+            WHERE chat_id = :chat_id
+                AND type = :type;
+       ";
 
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute([
             'chat_id' => $chatId,
+            'type' => $type,
         ]);
     }
 
