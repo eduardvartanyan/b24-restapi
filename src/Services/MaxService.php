@@ -369,13 +369,21 @@ readonly class MaxService
                         $payload = $request['payload'];
                         $payload['question'] = trim($update['message']['body']['text']);
                         $this->chatRequestRepository->setPayload($request['id'], $payload);
-
-                        // TODO: Создание задачи из контакта
-                        $taskId = 0;
-
+                        $responsibleId = [
+                            'ДТП' => 134,
+                            'Юридические услуги' => 134,
+                            'Экспертиза' => 134,
+                        ];
+                        $taskId = $this->b24->addTask([
+                            'TITLE' => 'Новый вопрос в Max по теме ' . $payload['theme'],
+                            'DESCRIPTION' => $payload['question'],
+                            'DEADLINE' => date('Y-m-d H:i:s', strtotime('+1 hour')),
+                            'CREATED_BY' => $responsibleId,
+                            'RESPONSIBLE_ID' => $responsibleId,
+                            'UF_CRM_TASK' => ['C_124774'],
+                        ]);
                         $this->chatRequestRepository->markSent($request['id'], $taskId, 'TASK');
                         $this->chatStateRepository->clearState($chatId);
-                        sleep(1);
                         return Bot::sendMessage('Ваш вопрос отправлен профильному специалисту. Ожидайте ответ');
                     }
                 }

@@ -441,4 +441,23 @@ class B24Service
             ]);
         }
     }
+
+    public function addTask(array $fields): ?int
+    {
+        try {
+            $result = $this->b24->core->call(
+                'tasks.task.add', ['fields' => $fields]
+            )->getResponseData()->getResult();
+            return (int) $result['task']['id'];
+        } catch (Throwable $e) {
+            Logger::error('[B24Service->addTask] Ошибка при добавлении задачи', [
+                'file'    => $e->getFile(),
+                'line'    => $e->getLine(),
+                'message' => $e->getMessage(),
+                'data'    => $fields,
+            ]);
+        }
+
+        return null;
+    }
 }
