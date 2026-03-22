@@ -116,17 +116,11 @@ class B24Service
         }
     }
 
-    public function setMaxChatId(int $contactId, int $maxChatId, int $maxUserId): void
+    public function setMaxChatId(int $contactId, int $maxChatId): void
     {
         try {
             $this->b24->getCRMScope()->contact()->update($contactId, [
                 'UF_CRM_1773132631' => $maxChatId,
-                'IM' => [
-                    [
-                        'VALUE_TYPE' => 'IMOL',
-                        'VALUE' => 'imol|max|2|' . $maxUserId . '|566',
-                    ],
-                ],
             ]);
         } catch (Throwable $e) {
             Logger::error('Ошибка при заполнении Max Chat ID', [

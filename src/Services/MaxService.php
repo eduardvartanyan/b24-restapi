@@ -104,7 +104,7 @@ readonly class MaxService
             $menu = $this->getMenu();
 
             if (isset($contactId)) {
-                $this->b24->setMaxChatId($contactId, $update['chat_id'], $update['user_id']);
+                $this->b24->setMaxChatId($contactId, $update['chat_id']);
             }
 
             return Bot::sendMessage($this->messages->get('message__welcome'), ['attachments' => [$menu]]);
@@ -240,7 +240,7 @@ readonly class MaxService
                             $payload['contact'] = $contact;
 
                             if ($contact['id']) {
-                                $this->b24->setMaxChatId($contact['id'], $chatId, $userId);
+                                $this->b24->setMaxChatId($contact['id'], $chatId);
                             }
 
                             $this->chatRequestRepository->setPayload($dtpRequest['id'], $payload);
@@ -352,7 +352,7 @@ readonly class MaxService
                         $contact = $this->parseVCard($attachment['payload']['vcf_info']);
                         $contact['id'] = $this->b24->getContactIdByPhone($this->normalizePhone($contact['phone']));
                         if ($contact['id']) {
-                            $this->b24->setMaxChatId($contact['id'], $chatId, $userId);
+                            $this->b24->setMaxChatId($contact['id'], $chatId);
                         }
                         return Bot::sendMessage($this->b24->getDealsReportByContactId($contact['id']));
                     }

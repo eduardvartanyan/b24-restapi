@@ -1,7 +1,7 @@
 <?php
 
 return [
-    'message__welcome' => 'Приветственное автосообщение',
+    'message__welcome' => 'Здравствуйте! Если вы попали в ДТП, мы поможем:',
     'message__menu' => 'Доступные функции:',
     'message__something_wrong' => 'Что-то пошло не так :/',
     'message__dtp_location' => 'Укажите адрес ДТП',
