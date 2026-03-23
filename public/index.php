@@ -44,7 +44,7 @@ try {
         case '/submit':
             if ($method === 'POST') {
                 $controller = $container->get(ReviewController::class);
-                $controller->submit();
+                $controller->   submit();
             }
             break;
 

@@ -370,9 +370,9 @@ readonly class MaxService
                         $payload['question'] = trim($update['message']['body']['text']);
                         $this->chatRequestRepository->setPayload($request['id'], $payload);
                         $responsibleIds = [
-                            'ДТП' => 134,
-                            'Юридические услуги' => 134,
-                            'Экспертиза' => 134,
+                            'ДТП' => $this->b24->getDtpConsultantId($payload['contact']['id']),
+                            'Юридические услуги' => 43,
+                            'Экспертиза' => 43,
                         ];
                         $taskId = $this->b24->addTask([
                             'TITLE' => 'Новый вопрос в Max по теме ' . $payload['theme'],

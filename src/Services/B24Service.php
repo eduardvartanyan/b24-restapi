@@ -5,6 +5,7 @@ namespace App\Services;
 
 use App\Helpers\Logger;
 use Bitrix24\SDK\Services\ServiceBuilder;
+use DateTimeImmutable;
 use Throwable;
 
 class B24Service
@@ -458,6 +459,52 @@ class B24Service
             ]);
         }
 
+        return null;
+    }
+
+    public function getDtpConsultantId($contactId): ?int
+    {
+        try {
+            $assignedById = null;
+            foreach ($this->b24->getCRMScope()->deal()->list(
+                [],
+                [
+                    'CONTACT_ID' => $contactId,
+                    'CATEGORY_ID' => ['14'],
+                    'STAGE_ID' => ['C14:UC_06USC6', 'C14:PREPAYMENT_INVOIC', 'C14:EXECUTING', 'C14:FINAL_INVOICE',
+                        'C14:UC_RT6JEL'],
+                ],
+                ['*'],
+            )->getDeals() as $deal) {
+                return $deal->ASSIGNED_BY_ID;
+            }
+            if (!$assignedById) {
+                $maxUser = $maxDate = null;
+                foreach ($this->b24->core->call(
+                    'im.department.employees.get',
+                    [
+                        'ID' => [37],
+                        'USER_DATA' => 'Y',
+                    ]
+                )->getResponseData()->getResult() as $item) {
+                    foreach ($item as $user) {
+                        if (empty($user['last_activity_date'])) { continue; }
+                        $currentDate = new DateTimeImmutable($user['last_activity_date']);
+                        if ($maxDate === null || $currentDate > $maxDate) {
+                            $maxDate = $currentDate;
+                            $maxUser = $user;
+                        }
+                    }
+                }
+                return (int) $maxUser['id'] ?? 43;
+            }
+        } catch (Throwable $e) {
+            Logger::error('[B24Service->getDispatcherOnline] Ошибка при получении диспетчера онлайн', [
+                'file'    => $e->getFile(),
+                'line'    => $e->getLine(),
+                'message' => $e->getMessage(),
+            ]);
+        }
         return null;
     }
 }
