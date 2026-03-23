@@ -369,7 +369,7 @@ readonly class MaxService
                         $payload = $request['payload'];
                         $payload['question'] = trim($update['message']['body']['text']);
                         $this->chatRequestRepository->setPayload($request['id'], $payload);
-                        $responsibleId = [
+                        $responsibleIds = [
                             'ДТП' => 134,
                             'Юридические услуги' => 134,
                             'Экспертиза' => 134,
@@ -378,8 +378,8 @@ readonly class MaxService
                             'TITLE' => 'Новый вопрос в Max по теме ' . $payload['theme'],
                             'DESCRIPTION' => $payload['question'],
                             'DEADLINE' => date('Y-m-d H:i:s', strtotime('+1 hour')),
-                            'CREATED_BY' => $responsibleId,
-                            'RESPONSIBLE_ID' => $responsibleId,
+                            'CREATED_BY' => $responsibleIds[$payload['theme']],
+                            'RESPONSIBLE_ID' => $responsibleIds[$payload['theme']],
                             'UF_CRM_TASK' => ['C_124774'],
                         ]);
                         $this->chatRequestRepository->markSent($request['id'], $taskId, 'TASK');
