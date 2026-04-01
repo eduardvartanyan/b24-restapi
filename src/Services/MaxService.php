@@ -5,6 +5,7 @@ namespace App\Services;
 
 use App\Helpers\Logger;
 use App\Repositories\ChatRequestRepository;
+use App\Repositories\ChatSourceRepository;
 use App\Repositories\ChatStateRepository;
 use App\Support\MessageCatalog;
 use Bot;
@@ -16,11 +17,16 @@ use Throwable;
 
 readonly class MaxService
 {
+    private const int SOURCE_SMS = 2526;
+    private const int SOURCE_QR = 2528;
+    private const int SOURCE_ORGANIC = 2530;
+
     public function __construct(
         private B24Service $b24,
         private PHPMaxBot $maxBot,
         private ChatStateRepository $chatStateRepository,
         private ChatRequestRepository $chatRequestRepository,
+        private ChatSourceRepository $chatSourceRepository,
         private DaDataService $daData,
         private MessageCatalog $messages
     ) { }
@@ -92,19 +98,37 @@ readonly class MaxService
         $this->maxBot->on('bot_started', function () {
             $update = PHPMaxBot::$currentUpdate;
             $chatId = $update['chat_id'];
-            $rid = $update['payload'] ?? null;
-            $contactId = $rid ? $this->b24->getContactIdByRid($rid) : $this->b24->getContactIdByMaxChatId($chatId);
+
+            if (!$this->chatSourceRepository->exists($chatId)) {
+                if ($update['payload'] === 'qr') {
+                    $source = $this::SOURCE_QR;
+                } else {
+                    $source = $update['payload'] ? $this::SOURCE_SMS : $this::SOURCE_ORGANIC;
+                }
+                $this->chatSourceRepository->create($chatId, $source);
+            }
+            if ($update['payload'] === 'qr') {
+                $contactId = $this->b24->getContactIdByMaxChatId($chatId);
+            } else {
+                $contactId = $update['payload']
+                    ? $this->b24->getContactIdByRid($update['payload'])
+                    : $this->b24->getContactIdByMaxChatId($chatId);
+            }
 
             Logger::info('[MaxService->registerHandlers] bot_started', [
                 'chat_id'    => $chatId,
-                'payload'    => $rid,
-                'contact_id' => $contactId,
+                'payload'    => $update['payload'] ,
+                'contact_id' => $contactId ?? null,
             ]);
 
             $menu = $this->getMenu();
 
             if (isset($contactId)) {
-                $this->b24->setMaxChatId($contactId, $update['chat_id']);
+                $this->b24->setMaxChatId(
+                    $contactId,
+                    $chatId,
+                    source: $this->chatSourceRepository->getSource($chatId)
+                );
             }
 
             return Bot::sendMessage($this->messages->get('message__welcome'), ['attachments' => [$menu]]);
@@ -240,7 +264,11 @@ readonly class MaxService
                             $payload['contact'] = $contact;
 
                             if ($contact['id']) {
-                                $this->b24->setMaxChatId($contact['id'], $chatId);
+                                $this->b24->setMaxChatId(
+                                    $contact['id'],
+                                    $chatId,
+                                    source: $this->chatSourceRepository->getSource($chatId)
+                                );
                             }
 
                             $this->chatRequestRepository->setPayload($dtpRequest['id'], $payload);
@@ -352,7 +380,11 @@ readonly class MaxService
                         $contact = $this->parseVCard($attachment['payload']['vcf_info']);
                         $contact['id'] = $this->b24->getContactIdByPhone($this->normalizePhone($contact['phone']));
                         if ($contact['id']) {
-                            $this->b24->setMaxChatId($contact['id'], $chatId);
+                            $this->b24->setMaxChatId(
+                                $contact['id'],
+                                $chatId,
+                                source: $this->chatSourceRepository->getSource($chatId)
+                            );
                         }
                         return Bot::sendMessage($this->b24->getDealsReportByContactId($contact['id']));
                     }
@@ -406,7 +438,11 @@ readonly class MaxService
                             $this->chatRequestRepository->setPayload($request['id'], $payload);
                             $this->chatRequestRepository->setPhone($request['id'], $contact['phone']);
                             if ($contact['id']) {
-                                $this->b24->setMaxChatId($contact['id'], $chatId);
+                                $this->b24->setMaxChatId(
+                                    $contact['id'],
+                                    $chatId,
+                                    source: $this->chatSourceRepository->getSource($chatId)
+                                );
                             }
                             $this->chatStateRepository->saveStateForMinutes(
                                 $chatId,

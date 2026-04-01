@@ -117,12 +117,16 @@ class B24Service
         }
     }
 
-    public function setMaxChatId(int $contactId, int $maxChatId): void
+    public function setMaxChatId(int $contactId, int $chatId, int $source = 0): void
     {
+        $fields = [
+            'UF_CRM_1773132631' => $chatId,
+        ];
+        if ($source) {
+            $fields['UF_CRM_1775011009'] = $source;
+        }
         try {
-            $this->b24->getCRMScope()->contact()->update($contactId, [
-                'UF_CRM_1773132631' => $maxChatId,
-            ]);
+            $this->b24->getCRMScope()->contact()->update($contactId, $fields);
         } catch (Throwable $e) {
             Logger::error('Ошибка при заполнении Max Chat ID', [
                 'file'    => $e->getFile(),
@@ -130,7 +134,7 @@ class B24Service
                 'message' => $e->getMessage(),
                 'data'    => [
                     'contactId' => $contactId,
-                    'maxChatId' => $maxChatId,
+                    'maxChatId' => $chatId,
                 ]
             ]);
         }

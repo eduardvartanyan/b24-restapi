@@ -6,6 +6,7 @@ use App\Http\Controllers\MaxController;
 use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\TgController;
 use App\Repositories\ChatRequestRepository;
+use App\Repositories\ChatSourceRepository;
 use App\Repositories\ChatStateRepository;
 use App\Repositories\ClickRepository;
 use App\Services\B24Service;
@@ -52,12 +53,14 @@ $container->set(MaxService::class,              fn() => new MaxService(
     $container->get(PHPMaxBot::class),
     $container->get(ChatStateRepository::class),
     $container->get(ChatRequestRepository::class),
+    $container->get(ChatSourceRepository::class),
     $container->get(DaDataService::class),
     new MessageCatalog(__DIR__ . '/Support/Messages/chatbot.php')
 ));
 $container->set(PHPMaxBot::class,               fn() => new PHPMaxBot($_ENV['MAX_BOT_TOKEN']));
 $container->set(ChatStateRepository::class,     fn() => new ChatStateRepository());
 $container->set(ChatRequestRepository::class,   fn() => new ChatRequestRepository());
+$container->set(ChatSourceRepository::class,    fn() => new ChatSourceRepository());
 $container->set(DaDataService::class,           fn() => new DaDataService(
     $_ENV['DADATA_TOKEN'],
     $_ENV['DADATA_SECRET']
