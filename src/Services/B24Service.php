@@ -462,7 +462,7 @@ class B24Service
         return null;
     }
 
-    public function getDtpConsultantId($contactId): ?int
+    public function getDtpConsultantId(int|string $contactId): ?int
     {
         try {
             $assignedById = null;
