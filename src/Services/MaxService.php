@@ -127,12 +127,16 @@ readonly class MaxService
                     $chatId,
                     source: $this->chatSourceRepository->getSource($chatId)
                 );
+
+                return Bot::sendMessage('Приветствую, ниже список доступных функций:', [
+                    'attachments' => [$this->getMenu()]
+                ]);
             }
 
-            return Bot::sendMessage('Приветствую 👋 Для начала диалога поделитесь контактом 👇',
+            return Bot::sendMessage('Приветствую, чтобы начать общение, нажмите тут 👇',
                 [
                     'attachments' => [Keyboard::inlineKeyboard([
-                        [Keyboard::requestContact('Отправить контакт')],
+                        [Keyboard::requestContact('Начать общение')],
                     ])],
                 ]
             );
