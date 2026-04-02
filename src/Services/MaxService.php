@@ -121,8 +121,6 @@ readonly class MaxService
                 'contact_id' => $contactId ?? null,
             ]);
 
-            $menu = $this->getMenu();
-
             if (isset($contactId)) {
                 $this->b24->setMaxChatId(
                     $contactId,
@@ -131,7 +129,13 @@ readonly class MaxService
                 );
             }
 
-            return Bot::sendMessage($this->messages->get('message__welcome'), ['attachments' => [$menu]]);
+            return Bot::sendMessage('Приветствую 👋 Для начала диалога поделитесь контактом 👇',
+                [
+                    'attachments' => [Keyboard::inlineKeyboard([
+                        [Keyboard::requestContact('Отправить контакт')],
+                    ])],
+                ]
+            );
         });
 
         $this->maxBot->on('message_created', function () {
@@ -145,6 +149,99 @@ readonly class MaxService
                 'chat_id'       => $chatId,
                 'chat_state'    => $chatState,
             ]);
+
+            if (
+                isset($update['message']['body']['attachments'])
+                && is_array($update['message']['body']['attachments'])
+                && count($update['message']['body']['attachments'])
+            ) {
+                $attachment = $update['message']['body']['attachments'][0];
+                if ($attachment['type'] === 'contact') {
+                    $contact = $this->parseVCard($attachment['payload']['vcf_info']);
+                    $contact['id'] = $this->b24->getContactIdByPhone($this->normalizePhone($contact['phone']));
+                    if ($contact['id']) {
+                        $this->b24->setMaxChatId(
+                            $contact['id'],
+                            $chatId,
+                            source: $this->chatSourceRepository->getSource($chatId)
+                        );
+                    }
+
+                    if ($chatState == 'dtp.waiting_contact') {
+                        if ($request = $this->chatRequestRepository->getActiveByChatAndType($chatId, 'dtp')) {
+                            $this->chatStateRepository->saveStateForMinutes(
+                                $chatId,
+                                'dtp.waiting_confirmation',
+                                30,
+                                $userId,
+                                [
+                                    'type' => 'dtp',
+                                    'request_id' => $request['id'],
+                                ]
+                            );
+                            $payload = $request['payload'];
+                            $contact['id'] = $payload['contact']['id'] ?? $contact['id'];
+                            $payload['contact'] = $contact;
+                            $this->chatRequestRepository->setPayload($request['id'], $payload);
+                            $this->chatRequestRepository->setPhone($request['id'], $contact['phone']);
+                            return Bot::sendMessage(
+                                'Подтвердите заявку:' . PHP_EOL . $this->printDtpCard($payload),
+                                [
+                                    'attachments' => [Keyboard::inlineKeyboard([
+                                        [Keyboard::callback(
+                                            $this->messages->get('button_label__correct'),
+                                            'request_confirmed'
+                                        )],
+                                        [Keyboard::callback(
+                                            $this->messages->get('button_label__cancel'),
+                                            'menu'
+                                        )],
+                                    ])],
+                                ]
+                            );
+                        }
+                    }
+
+                    elseif ($chatState == 'status.waiting_contact') {
+                        return Bot::sendMessage($this->b24->getDealsReportByContactId($contact['id']));
+                    }
+
+                    elseif ($chatState == 'ask.waiting_contact') {
+                        if ($request = $this->chatRequestRepository->getActiveByChatAndType($chatId, 'ask')) {
+                            $payload = $request['payload'];
+                            $contact['id'] = $payload['contact']['id'] ?? $contact['id'];
+                            $payload['contact'] = $contact;
+                            $this->chatRequestRepository->setPayload($request['id'], $payload);
+                            $this->chatRequestRepository->setPhone($request['id'], $contact['phone']);
+                            $this->chatStateRepository->saveStateForMinutes(
+                                $chatId,
+                                'ask.waiting_theme',
+                                30,
+                                $update['message']['recipient']['user_id'],
+                                context: [
+                                    'type' => 'ask',
+                                    'request_id' => $request['id'],
+                                ]
+                            );
+                            return Bot::sendMessage('По какой теме ваш вопрос?',
+                                [
+                                    'attachments' => [Keyboard::inlineKeyboard([
+                                        [Keyboard::callback('ДТП', 'ask__dtp')],
+                                        [Keyboard::callback('Юридические услуги', 'ask__law')],
+                                        [Keyboard::callback('Экспертиза', 'ask__expertise')],
+                                    ])],
+                                ]
+                            );
+                        }
+                    }
+
+                    else {
+                       return Bot::sendMessage('Доступные функции:', [
+                            'attachments' => [$this->getMenu()]
+                       ]);
+                    }
+                }
+            }
 
             if ($chatState == 'dtp.waiting_address') {
                 if (
@@ -236,66 +333,6 @@ readonly class MaxService
                 }
             }
 
-            if ($chatState == 'dtp.waiting_contact') {
-                if (
-                    isset($update['message']['body']['attachments'])
-                    && is_array($update['message']['body']['attachments'])
-                    && count($update['message']['body']['attachments'])
-                ) {
-                    $attachment = $update['message']['body']['attachments'][0];
-
-                    if ($attachment['type'] === 'contact') {
-                        if ($dtpRequest) {
-                            $this->chatStateRepository->saveStateForMinutes(
-                                $chatId,
-                                'dtp.waiting_confirmation',
-                                30,
-                                $userId,
-                                [
-                                    'type' => 'dtp',
-                                    'request_id' => $dtpRequest['id'],
-                                ]
-                            );
-
-                            $payload = $dtpRequest['payload'];
-                            $contact = $this->parseVCard($attachment['payload']['vcf_info']);
-                            $phone = $this->normalizePhone($contact['phone']);
-                            $contact['id'] = $payload['contact']['id'] ?? $this->b24->getContactIdByPhone($phone);
-                            $payload['contact'] = $contact;
-
-                            if ($contact['id']) {
-                                $this->b24->setMaxChatId(
-                                    $contact['id'],
-                                    $chatId,
-                                    source: $this->chatSourceRepository->getSource($chatId)
-                                );
-                            }
-
-                            $this->chatRequestRepository->setPayload($dtpRequest['id'], $payload);
-                            $this->chatRequestRepository->setPhone($dtpRequest['id'], $contact['phone']);
-
-                            $dtpInfo = $this->printDtpCard($payload);
-
-                            return Bot::sendMessage(
-                                'Подтвердите заявку:' . PHP_EOL . $dtpInfo,
-                                [
-                                    'attachments' => [Keyboard::inlineKeyboard([
-                                        [Keyboard::callback(
-                                            $this->messages->get('button_label__correct'),
-                                            'request_confirmed'
-                                        )],
-                                        [Keyboard::callback(
-                                            $this->messages->get('button_label__cancel'),
-                                            'menu'
-                                        )],
-                                    ])],
-                                ]
-                            );
-                        }
-                    }
-                }
-            }
-
             if ($chatState == 'dtp.waiting_name') {
                 if (
                     isset($update['message']['body']['text'])
@@ -369,28 +406,6 @@ readonly class MaxService
                 }
             }
 
-            if ($chatState == 'status.waiting_contact') {
-                if (
-                    isset($update['message']['body']['attachments'])
-                    && is_array($update['message']['body']['attachments'])
-                    && count($update['message']['body']['attachments'])
-                ) {
-                    $attachment = $update['message']['body']['attachments'][0];
-                    if ($attachment['type'] === 'contact') {
-                        $contact = $this->parseVCard($attachment['payload']['vcf_info']);
-                        $contact['id'] = $this->b24->getContactIdByPhone($this->normalizePhone($contact['phone']));
-                        if ($contact['id']) {
-                            $this->b24->setMaxChatId(
-                                $contact['id'],
-                                $chatId,
-                                source: $this->chatSourceRepository->getSource($chatId)
-                            );
-                        }
-                        return Bot::sendMessage($this->b24->getDealsReportByContactId($contact['id']));
-                    }
-                }
-            }
-
             if ($chatState == 'ask.waiting_question') {
                 if (
                     isset($update['message']['body']['text'])
@@ -417,53 +432,6 @@ readonly class MaxService
                         $this->chatRequestRepository->markSent($request['id'], $taskId, 'TASK');
                         $this->chatStateRepository->clearState($chatId);
                         return Bot::sendMessage('Ваш вопрос отправлен профильному специалисту. Ожидайте ответ');
-                    }
-                }
-            }
-
-            if ($chatState == 'ask.waiting_contact') {
-                if (
-                    isset($update['message']['body']['attachments'])
-                    && is_array($update['message']['body']['attachments'])
-                    && count($update['message']['body']['attachments'])
-                ) {
-                    if ($request = $this->chatRequestRepository->getActiveByChatAndType($chatId, 'ask')) {
-                        $attachment = $update['message']['body']['attachments'][0];
-                        if ($attachment['type'] === 'contact') {
-                            $payload = $request['payload'];
-                            $contact = $this->parseVCard($attachment['payload']['vcf_info']);
-                            $contact['id'] = $payload['contact']['id'] ??
-                                $this->b24->getContactIdByPhone($this->normalizePhone($contact['phone']));
-                            $payload['contact'] = $contact;
-                            $this->chatRequestRepository->setPayload($request['id'], $payload);
-                            $this->chatRequestRepository->setPhone($request['id'], $contact['phone']);
-                            if ($contact['id']) {
-                                $this->b24->setMaxChatId(
-                                    $contact['id'],
-                                    $chatId,
-                                    source: $this->chatSourceRepository->getSource($chatId)
-                                );
-                            }
-                            $this->chatStateRepository->saveStateForMinutes(
-                                $chatId,
-                                'ask.waiting_theme',
-                                30,
-                                $update['message']['recipient']['user_id'],
-                                context: [
-                                    'type' => 'ask',
-                                    'request_id' => $request['id'],
-                                ]
-                            );
-                            return Bot::sendMessage('По какой теме ваш вопрос?',
-                                [
-                                    'attachments' => [Keyboard::inlineKeyboard([
-                                        [Keyboard::callback('ДТП', 'ask__dtp')],
-                                        [Keyboard::callback('Юридические услуги', 'ask__law')],
-                                        [Keyboard::callback('Экспертиза', 'ask__expertise')],
-                                    ])],
-                                ]
-                            );
-                        }
                     }
                 }
             }
