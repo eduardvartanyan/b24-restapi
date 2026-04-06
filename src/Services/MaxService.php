@@ -431,7 +431,7 @@ readonly class MaxService
                             'DEADLINE' => date('Y-m-d H:i:s', strtotime('+1 hour')),
                             'CREATED_BY' => $responsibleIds[$payload['theme']],
                             'RESPONSIBLE_ID' => $responsibleIds[$payload['theme']],
-                            'UF_CRM_TASK' => ['C_124774'],
+                            'UF_CRM_TASK' => ['C_' . $payload['contact']['id']],
                         ]);
                         $this->chatRequestRepository->markSent($request['id'], $taskId, 'TASK');
                         $this->chatStateRepository->clearState($chatId);
@@ -1004,6 +1004,6 @@ readonly class MaxService
 
     private function normalizePhone(string $phone): string
     {
-        return '+7' . substr(str_replace(['(', ')', '-', ' '], '', $phone), -10);
+        return '8' . substr(str_replace(['(', ')', '-', ' '], '', $phone), -10);
     }
 }

@@ -7,6 +7,7 @@ use App\Http\Controllers\MaxController;
 use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\TgController;
 use App\Http\Middleware;
+use App\Services\B24Service;
 use App\Support\Container;
 
 require_once __DIR__ . '/../vendor/autoload.php';
@@ -68,6 +69,10 @@ try {
         // https://review.avarcomf.ru/test
         case '/test':
             echo '<pre>';
+            $b24 = $container->get(B24Service::class);
+            $phone = $b24->getContactIdByPhone('8' . substr('79025440144', -10));
+
+            var_dump($phone);
             break;
 
     }
