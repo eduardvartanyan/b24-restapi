@@ -126,6 +126,28 @@ class B24Service
             $fields['UF_CRM_1775011009'] = $source;
         }
         try {
+            $contacts = $this->b24->getCRMScope()->contact()->list(
+                [],
+                [
+                    'ID' => $contactId,
+                    'IM' => "imol|max|2|$chatId",
+                ],
+                ['ID'],
+                0
+            )->getContacts();
+            if (count($contacts) === 0) {
+                $lead = $this->getLeadByMaxChatId($chatId);
+                if ($lead) {
+                    $fields['IM'] = [[
+                            'VALUE' => $lead['imol'],
+                            'VALUE_TYPE' => 'IMOL',
+                    ]];
+                    $this->b24->getCRMScope()->lead()->update($lead['id'], [
+                        'STATUS_ID' => '4',
+                    ]);
+                }
+            }
+
             $this->b24->getCRMScope()->contact()->update($contactId, $fields);
         } catch (Throwable $e) {
             Logger::error('Ошибка при заполнении Max Chat ID', [
@@ -402,6 +424,34 @@ class B24Service
         }
 
         return $result;
+    }
+
+    public function getLeadByMaxChatId(int $chatId): ?array
+    {
+        try {
+            $result = $this->b24->getCRMScope()->lead()->list(
+                [],
+                ['IM' => "imol|max|2|$chatId"],
+                ['ID', 'IM']
+            );
+            $leads = $result->getLeads();
+            if (count($leads) <= 0) return null;
+            $im = $leads[0]->IM;
+            if ($im && count($im) <= 0) return null;
+            return [
+                'id' => $leads[0]->ID,
+                'imol' => $im[0]->VALUE,
+            ];
+        } catch (Throwable $e) {
+            Logger::error('Ошибка при получении ID контакта', [
+                'file'    => $e->getFile(),
+                'line'    => $e->getLine(),
+                'message' => $e->getMessage(),
+                'data'    => $chatId
+            ]);
+        }
+
+        return null;
     }
 
     public function sendCurl(string $method, array $params): array

@@ -70,9 +70,12 @@ try {
         case '/test':
             echo '<pre>';
             $b24 = $container->get(B24Service::class);
-            $phone = $b24->getContactIdByPhone('8' . substr('79025440144', -10));
+            $b24->setMaxChatId(
+                contactId: 124774,
+                chatId: 14199860,
+                source: 2526
+            );
 
-            var_dump($phone);
             break;
 
     }
