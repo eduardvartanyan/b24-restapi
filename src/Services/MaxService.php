@@ -163,13 +163,20 @@ readonly class MaxService
                 if ($attachment['type'] === 'contact') {
                     $contact = $this->parseVCard($attachment['payload']['vcf_info']);
                     $contact['id'] = $this->b24->getContactIdByPhone($this->normalizePhone($contact['phone']));
-                    if ($contact['id']) {
-                        $this->b24->setMaxChatId(
-                            $contact['id'],
-                            $chatId,
-                            source: $this->chatSourceRepository->getSource($chatId)
-                        );
+                    if (!$contact['id']) {
+                        $contact['id'] = $this->b24->addContact([
+                            'NAME' => $contact['name'],
+                            'PHONE' => [[
+                                'VALUE' => $contact['phone'],
+                                'VALUE_TYPE' => 'WORK',
+                            ]]
+                        ]);
                     }
+                    $this->b24->setMaxChatId(
+                        $contact['id'],
+                        $chatId,
+                        source: $this->chatSourceRepository->getSource($chatId)
+                    );
 
                     if ($chatState == 'dtp.waiting_contact') {
                         if ($request = $this->chatRequestRepository->getActiveByChatAndType($chatId, 'dtp')) {
