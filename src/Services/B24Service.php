@@ -126,28 +126,6 @@ class B24Service
             $fields['UF_CRM_1775011009'] = $source;
         }
         try {
-            $contacts = $this->b24->getCRMScope()->contact()->list(
-                [],
-                [
-                    'ID' => $contactId,
-                    'IM' => "imol|max|2|$chatId",
-                ],
-                ['ID'],
-                0
-            )->getContacts();
-            if (count($contacts) === 0) {
-                $lead = $this->getLeadByMaxChatId($chatId);
-                if ($lead) {
-                    $fields['IM'] = [[
-                            'VALUE' => $lead['imol'],
-                            'VALUE_TYPE' => 'IMOL',
-                    ]];
-                    $this->b24->getCRMScope()->lead()->update($lead['id'], [
-                        'STATUS_ID' => '4',
-                    ]);
-                }
-            }
-
             $this->b24->getCRMScope()->contact()->update($contactId, $fields);
         } catch (Throwable $e) {
             Logger::error('Ошибка при заполнении Max Chat ID', [
