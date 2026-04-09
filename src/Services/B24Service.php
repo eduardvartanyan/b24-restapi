@@ -117,16 +117,23 @@ class B24Service
         }
     }
 
-    public function setMaxChatId(int $contactId, int $chatId, int $source = 0): void
+    public function setMaxChatId(int $contactId, int $chatId, int $userId, int $source = 0): void
     {
         $fields = [
             'UF_CRM_1773132631' => $chatId,
+            'UF_CRM_MAXID_WZ' => $userId
         ];
         if ($source) {
             $fields['UF_CRM_1775011009'] = $source;
         }
         try {
             $this->b24->getCRMScope()->contact()->update($contactId, $fields);
+            if ($leadId = $this->getLeadByMaxUserId($userId)) {
+                $this->updateLead($leadId, [
+                    'CONTACT_ID' => $contactId,
+                    'STATUS_ID' => '4',
+                ]);
+            }
         } catch (Throwable $e) {
             Logger::error('Ошибка при заполнении Max Chat ID', [
                 'file'    => $e->getFile(),
@@ -404,28 +411,23 @@ class B24Service
         return $result;
     }
 
-    public function getLeadByMaxChatId(int $chatId): ?array
+    public function getLeadByMaxUserId(int $userId): ?int
     {
         try {
             $result = $this->b24->getCRMScope()->lead()->list(
                 [],
-                ['IM' => "imol|max|2|$chatId"],
-                ['ID', 'IM']
+                ['UF_CRM_MAXID_WZ' => $userId],
+                ['ID']
             );
             $leads = $result->getLeads();
             if (count($leads) <= 0) return null;
-            $im = $leads[0]->IM;
-            if ($im && count($im) <= 0) return null;
-            return [
-                'id' => $leads[0]->ID,
-                'imol' => $im[0]->VALUE,
-            ];
+            return $leads[0]->ID;
         } catch (Throwable $e) {
-            Logger::error('Ошибка при получении ID контакта', [
+            Logger::error('[B24Service->getLeadByMaxChatId]', [
                 'file'    => $e->getFile(),
                 'line'    => $e->getLine(),
                 'message' => $e->getMessage(),
-                'data'    => $chatId
+                'data'    => $userId
             ]);
         }
 
@@ -470,6 +472,23 @@ class B24Service
                     'dealId' => $dealId,
                     'field'  => $field,
                     'value'  => $value,
+                ]
+            ]);
+        }
+    }
+
+    public function updateLead(int $leadId, array $fields): void
+    {
+        try {
+            $this->b24->getCRMScope()->lead()->update($leadId, $fields);
+        } catch (Throwable $e) {
+            Logger::error('[B24Service->updateLead]', [
+                'file'    => $e->getFile(),
+                'line'    => $e->getLine(),
+                'message' => $e->getMessage(),
+                'data'    => [
+                    'leadId' => $leadId,
+                    'fields' => $fields,
                 ]
             ]);
         }

@@ -98,6 +98,7 @@ readonly class MaxService
         $this->maxBot->on('bot_started', function () {
             $update = PHPMaxBot::$currentUpdate;
             $chatId = $update['chat_id'];
+            $userId = $update['user_id'];
 
             if (!$this->chatSourceRepository->exists($chatId)) {
                 if ($update['payload'] === 'qr') {
@@ -125,6 +126,7 @@ readonly class MaxService
                 $this->b24->setMaxChatId(
                     $contactId,
                     $chatId,
+                    $userId,
                     source: $this->chatSourceRepository->getSource($chatId)
                 );
 
@@ -145,7 +147,7 @@ readonly class MaxService
         $this->maxBot->on('message_created', function () {
             $update = PHPMaxBot::$currentUpdate;
             $chatId = $update['message']['recipient']['chat_id'];
-            $userId = $update['message']['recipient']['user_id'];
+            $userId = $update['message']['sender']['user_id'];
             $chatState = $this->chatStateRepository->getState($chatId);
             $dtpRequest = $this->chatRequestRepository->getActiveByChatAndType($chatId, 'dtp');
 
@@ -172,9 +174,11 @@ readonly class MaxService
                             ]]
                         ]);
                     }
+
                     $this->b24->setMaxChatId(
                         $contact['id'],
                         $chatId,
+                        $userId,
                         source: $this->chatSourceRepository->getSource($chatId)
                     );
 
@@ -467,7 +471,7 @@ readonly class MaxService
         $this->maxBot->action('request_dtp', function() {
             $update = PHPMaxBot::$currentUpdate;
             $chatId = $update['message']['recipient']['chat_id'];
-            $userId = $update['message']['recipient']['user_id'];
+            $userId = $update['message']['sender']['user_id'];
             $contactId = $this->b24->getContactIdByMaxChatId($chatId);
             $requestId = $this->chatRequestRepository->create($chatId, 'dtp');
             $this->chatRequestRepository->setPayload($requestId, [
@@ -506,7 +510,7 @@ readonly class MaxService
         $this->maxBot->action('manual_address', function() {
             $update = PHPMaxBot::$currentUpdate;
             $chatId = $update['message']['recipient']['chat_id'];
-            $userId = $update['message']['recipient']['user_id'];
+            $userId = $update['message']['sender']['user_id'];
             $requestId = $this->chatRequestRepository->create($chatId, 'dtp');
 
             $this->chatStateRepository->saveStateForMinutes(
@@ -533,7 +537,7 @@ readonly class MaxService
         $this->maxBot->action('address_confirmed', function() {
             $update = PHPMaxBot::$currentUpdate;
             $chatId = $update['message']['recipient']['chat_id'];
-            $userId = $update['message']['recipient']['user_id'];
+            $userId = $update['message']['sender']['user_id'];
             $requestId = $this->chatRequestRepository->create($chatId, 'dtp');
 
             $this->chatStateRepository->saveStateForMinutes(
@@ -563,7 +567,7 @@ readonly class MaxService
         $this->maxBot->action('have_victims', function() {
             $update = PHPMaxBot::$currentUpdate;
             $chatId = $update['message']['recipient']['chat_id'];
-            $userId = $update['message']['recipient']['user_id'];
+            $userId = $update['message']['sender']['user_id'];
 
             if ($request = $this->chatRequestRepository->getActiveByChatAndType($chatId, 'dtp')) {
                 $this->chatStateRepository->saveStateForMinutes(
@@ -606,7 +610,7 @@ readonly class MaxService
         $this->maxBot->action('no_victims', function() {
             $update = PHPMaxBot::$currentUpdate;
             $chatId = $update['message']['recipient']['chat_id'];
-            $userId = $update['message']['recipient']['user_id'];
+            $userId = $update['message']['sender']['user_id'];
 
             if ($request = $this->chatRequestRepository->getActiveByChatAndType($chatId, 'dtp')) {
                 $this->chatStateRepository->saveStateForMinutes(
@@ -649,7 +653,7 @@ readonly class MaxService
         $this->maxBot->action('name', function() {
             $update = PHPMaxBot::$currentUpdate;
             $chatId = $update['message']['recipient']['chat_id'];
-            $userId = $update['message']['recipient']['user_id'];
+            $userId = $update['message']['sender']['user_id'];
 
             if ($request = $this->chatRequestRepository->getActiveByChatAndType($chatId, 'dtp')) {
                 $this->chatStateRepository->saveStateForMinutes(
