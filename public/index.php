@@ -69,13 +69,12 @@ try {
         // https://review.avarcomf.ru/test
         case '/test':
             echo '<pre>';
-            $b24 = $container->get(B24Service::class);
-            $chatId = 8391477;
-            $contactId = $b24->getContactIdByMaxChatId($chatId);
-            echo 'Контакт = ' . $contactId . PHP_EOL;
-            $report = $b24->getDealsReportByContactId($contactId);
-            echo $report . PHP_EOL . PHP_EOL;
-            $b24->test($contactId);
+//            $b24 = $container->get(B24Service::class);
+//            $chatId = 32921713;
+//            $contactId = $b24->getContactIdByMaxChatId($chatId);
+//            echo 'Контакт = ' . $contactId . PHP_EOL;
+//            $report = $b24->getDealsReportByContactId($contactId);
+//            echo $report . PHP_EOL . PHP_EOL;
 
             break;
 
