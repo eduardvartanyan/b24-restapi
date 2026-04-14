@@ -70,8 +70,12 @@ try {
         case '/test':
             echo '<pre>';
             $b24 = $container->get(B24Service::class);
-            $result = $b24->getContactIdByPhone('9025444819');
-            var_dump($result);
+            $chatId = 8391477;
+            $contactId = $b24->getContactIdByMaxChatId($chatId);
+            echo 'Контакт = ' . $contactId . PHP_EOL;
+            $report = $b24->getDealsReportByContactId($contactId);
+            echo $report . PHP_EOL . PHP_EOL;
+            $b24->test($contactId);
 
             break;
 

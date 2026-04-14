@@ -193,6 +193,41 @@ class B24Service
         return null;
     }
 
+    public function test(int|string $contactId): string
+    {
+        try {
+            $offset = 0;
+            $next = true;
+            while ($next) {
+                $deals = $this->b24->getCRMScope()->deal()->list(
+                    [],
+                    [
+                        'CATEGORY_ID' => ['14'],
+                        'STAGE_ID' => ['C14:NEW', 'C14:PREPARATION', 'C14:UC_06USC6', 'C14:PREPAYMENT_INVOIC',
+                            'C14:EXECUTING', 'C14:FINAL_INVOICE', 'C14:UC_RT6JEL'],
+                    ],
+                    ['*'],
+                    $offset
+                )->getDeals();
+                foreach ($deals as $deal) {
+                    foreach ($this->b24->core->call('crm.deal.contact.items.get', [
+                        'id' => $deal->ID,
+                    ])->getResponseData()->getResult() as $contact) {
+                        if ($contact['CONTACT_ID'] == $contactId) {
+                            echo $deal->ID;
+                        }
+                    }
+                }
+                $next = count($deals) == 50;
+                $offset += 50;
+            }
+        } catch (Throwable $e) {
+            echo $e->getMessage() . PHP_EOL;
+        }
+
+        return '';
+    }
+
     public function getDealsReportByContactId(int|string $contactId): string
     {
         $report = null;
