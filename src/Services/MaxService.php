@@ -1015,6 +1015,6 @@ readonly class MaxService
 
     private function normalizePhone(string $phone): string
     {
-        return '8' . substr(str_replace(['(', ')', '-', ' '], '', $phone), -10);
+        return substr(str_replace(['(', ')', '-', ' '], '', $phone), -10);
     }
 }

@@ -323,16 +323,23 @@ class B24Service
 
     public function getContactIdByPhone(string $phone): ?int
     {
+        $phoneVariants = [
+            '8' . $phone,
+            '7' . $phone,
+            '+7' . $phone,
+        ];
         try {
-            $result = $this->b24->getCRMScope()->contact()->list(
-                [],
-                ['PHONE' => $phone],
-                ['ID'],
-                0
-            );
-            $contacts = $result->getContacts();
-
-            return $contacts[0]->ID;
+            foreach ($phoneVariants as $phoneVariant) {
+                $result = $this->b24->getCRMScope()->contact()->list(
+                    [],
+                    ['PHONE' => $phoneVariant],
+                    ['ID'],
+                    0
+                );
+                if ($contacts = $result->getContacts()) {
+                    return $contacts[0]->ID;
+                }
+            }
         } catch (Throwable $e) {
             Logger::error('Ошибка при получении ID контакта', [
                 'file'    => $e->getFile(),
