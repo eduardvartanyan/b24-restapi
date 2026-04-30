@@ -231,7 +231,7 @@ class B24Service
         ];
 
         try {
-            foreach ($this->getAccidentDealsByContactId($contactId, ['*']) as $deal) {
+            foreach ($this->getAccidentDealsByContactId($contactId) as $deal) {
                 $report .= $statuses[$deal->STAGE_ID]['emoji'] . 'Заявка № ' . $deal->ID . ' от '
                     . $deal->DATE_CREATE->format('d.m.Y') . ' — ' . $types[$deal->CATEGORY_ID] . PHP_EOL;
                 $report .= 'Статус: ' . $statuses[$deal->STAGE_ID]['text'] . PHP_EOL;
