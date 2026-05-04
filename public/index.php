@@ -30,6 +30,14 @@ try {
             }
             break;
 
+        case '/api/b24/max/send-message':
+            if ($method === 'POST') {
+                Middleware::check();
+            }
+            $maxController = $container->get(MaxController::class);
+            $maxController->handleB24MessageWebhook();
+            break;
+
 //        case '/dtpimport':
 //            $service = $container->get(DailyImportService::class);
 //            $dateFrom = $_GET['date'] ?? '';

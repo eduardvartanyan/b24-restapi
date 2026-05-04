@@ -961,6 +961,43 @@ readonly class MaxService
         }
     }
 
+    public function sendMessageToChat(int|string $chatId, string $message): array
+    {
+        try {
+            Bot::sendMessageToChat($chatId, trim($message));
+
+            Logger::info('Max bot: message sent to chat', [
+                'chat_id' => $chatId,
+            ]);
+
+            return ['status' => 200, 'body' => 'OK'];
+        } catch (ApiException $e) {
+            Logger::error('Max bot: API exception while sending message to chat', [
+                'chat_id' => $chatId,
+                'message' => $e->getMessage(),
+                'code'    => method_exists($e, 'getApiErrorCode') ? $e->getApiErrorCode() : null,
+            ]);
+
+            return ['status' => 500, 'body' => 'MAX API error'];
+        } catch (MaxBotException $e) {
+            Logger::error('Max bot: library exception while sending message to chat', [
+                'chat_id' => $chatId,
+                'message' => $e->getMessage(),
+                'context' => method_exists($e, 'getContext') ? $e->getContext() : null,
+            ]);
+
+            return ['status' => 500, 'body' => 'Bot error'];
+        } catch (Throwable $e) {
+            Logger::error('Max bot: unexpected exception while sending message to chat', [
+                'chat_id' => $chatId,
+                'message' => $e->getMessage(),
+                'trace'   => $e->getTraceAsString(),
+            ]);
+
+            return ['status' => 500, 'body' => 'Internal error'];
+        }
+    }
+
     private function getMenu(): array
     {
         return Keyboard::inlineKeyboard([
