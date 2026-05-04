@@ -66,15 +66,7 @@ readonly class MaxController
             return;
         }
 
-        $raw = file_get_contents('php://input') ?: '';
-        $payload = $_REQUEST;
-
-        if ($raw !== '') {
-            $json = json_decode($raw, true);
-            if (is_array($json)) {
-                $payload = array_merge($payload, $json);
-            }
-        }
+        $payload = $_GET;
 
         $chatId = $payload['chatId'] ?? $payload['chat_id'] ?? null;
         $userId = $payload['userId']
