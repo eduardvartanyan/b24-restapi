@@ -961,35 +961,52 @@ readonly class MaxService
         }
     }
 
-    public function sendMessageToChat(int|string $chatId, string $message): array
+    public function sendMessage(string $message, int|string|null $chatId = null, int|string|null $userId = null): array
     {
         try {
-            Bot::sendMessageToChat($chatId, trim($message));
+            if ($chatId !== null && trim((string)$chatId) !== '') {
+                Bot::sendMessageToChat($chatId, trim($message));
 
-            Logger::info('Max bot: message sent to chat', [
-                'chat_id' => $chatId,
-            ]);
+                Logger::info('Max bot: message sent to chat', [
+                    'chat_id' => $chatId,
+                ]);
 
-            return ['status' => 200, 'body' => 'OK'];
+                return ['status' => 200, 'body' => 'OK'];
+            }
+
+            if ($userId !== null && trim((string)$userId) !== '') {
+                Bot::sendMessageToUser($userId, trim($message));
+
+                Logger::info('Max bot: message sent to user', [
+                    'user_id' => $userId,
+                ]);
+
+                return ['status' => 200, 'body' => 'OK'];
+            }
+
+            return ['status' => 400, 'body' => 'chatId or userId is required'];
         } catch (ApiException $e) {
-            Logger::error('Max bot: API exception while sending message to chat', [
+            Logger::error('Max bot: API exception while sending message', [
                 'chat_id' => $chatId,
+                'user_id' => $userId,
                 'message' => $e->getMessage(),
                 'code'    => method_exists($e, 'getApiErrorCode') ? $e->getApiErrorCode() : null,
             ]);
 
             return ['status' => 500, 'body' => 'MAX API error'];
         } catch (MaxBotException $e) {
-            Logger::error('Max bot: library exception while sending message to chat', [
+            Logger::error('Max bot: library exception while sending message', [
                 'chat_id' => $chatId,
+                'user_id' => $userId,
                 'message' => $e->getMessage(),
                 'context' => method_exists($e, 'getContext') ? $e->getContext() : null,
             ]);
 
             return ['status' => 500, 'body' => 'Bot error'];
         } catch (Throwable $e) {
-            Logger::error('Max bot: unexpected exception while sending message to chat', [
+            Logger::error('Max bot: unexpected exception while sending message', [
                 'chat_id' => $chatId,
+                'user_id' => $userId,
                 'message' => $e->getMessage(),
                 'trace'   => $e->getTraceAsString(),
             ]);

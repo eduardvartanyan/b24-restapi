@@ -77,10 +77,19 @@ readonly class MaxController
         }
 
         $chatId = $payload['chatId'] ?? $payload['chat_id'] ?? null;
+        $userId = $payload['userId']
+            ?? $payload['user_id']
+            ?? $payload['usedId']
+            ?? $payload['used_id']
+            ?? $payload['userid']
+            ?? null;
         $message = $payload['message'] ?? $payload['text'] ?? null;
 
-        if ($chatId === null || trim((string)$chatId) === '') {
-            $this->jsonResponse(400, ['error' => 'chatId is required']);
+        if (
+            ($chatId === null || trim((string)$chatId) === '')
+            && ($userId === null || trim((string)$userId) === '')
+        ) {
+            $this->jsonResponse(400, ['error' => 'chatId or userId is required']);
             return;
         }
 
@@ -91,9 +100,14 @@ readonly class MaxController
 
         Logger::info('B24 Max message webhook: incoming request', [
             'chat_id' => $chatId,
+            'user_id' => $userId,
         ]);
 
-        $result = $this->maxService->sendMessageToChat($chatId, (string)$message);
+        $result = $this->maxService->sendMessage(
+            message: (string)$message,
+            chatId: $chatId,
+            userId: $userId
+        );
         $this->jsonResponse($result['status'], ['message' => $result['body']]);
     }
 
