@@ -16,7 +16,15 @@ require_once __DIR__ . '/../src/bootstrap.php';
 $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) ?: '/';
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
-Logger::info('Входящий запрос', ['uri' => $uri, 'method' => $method, 'ip' => $_SERVER['REMOTE_ADDR']]);
+Logger::info('Входящий запрос', [
+    'uri'       => $uri,
+    'method'    => $method,
+    'ip'        => $_SERVER['REMOTE_ADDR'],
+    'query'     => $_GET,
+    'post'      => $_POST,
+    'userAgent' => $_SERVER['HTTP_USER_AGENT'] ?? null,
+    'referer'   => $_SERVER['HTTP_REFERER'] ?? null,
+]);
 
 try {
     /** @var Container $container */

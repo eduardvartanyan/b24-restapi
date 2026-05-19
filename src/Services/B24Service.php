@@ -407,7 +407,14 @@ class B24Service
         try {
             $result = $this->b24->getCRMScope()->item()->add($entityTypeId, $fields);
 
-            return $result->item()->id;
+            $itemId = $result->item()->id;
+            Logger::info('B24: ответ crm.item.add', [
+                'entityTypeId' => $entityTypeId,
+                'fields'       => $fields,
+                'itemId'       => $itemId,
+            ]);
+
+            return $itemId;
         } catch (Throwable $e) {
             Logger::error('Ошибка при получении ID контакта', [
                 'file'    => $e->getFile(),
