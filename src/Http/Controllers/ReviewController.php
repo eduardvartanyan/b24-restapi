@@ -15,6 +15,11 @@ readonly class ReviewController
 
     public function showForm(string $dealRid, string $contactRid) : void
     {
+        if ($dealRid === '' || $contactRid === '') {
+            $this->render('review/error', []);
+            return;
+        }
+
         $questions = $this->b24Service->loadListItems(42); // 42 — список вопросов
 
         $dealId = $this->b24Service->getDealIdByRid($dealRid);
