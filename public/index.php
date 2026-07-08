@@ -55,7 +55,14 @@ try {
 
         case '/':
             $reviewController = $container->get(ReviewController::class);
-            $reviewController->showForm($_GET['d'] ?? '', $_GET['c'] ?? '');
+            $dealRid = $_GET['d'] ?? '';
+            $contactRid = $_GET['c'] ?? '';
+
+            if (str_contains($dealRid, '_')) {
+                [$dealRid, $contactRid] = explode('_', $dealRid, 2);
+            }
+
+            $reviewController->showForm($dealRid, $contactRid);
             break;
 
         case '/submit':
