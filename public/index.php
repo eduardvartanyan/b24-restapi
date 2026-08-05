@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 use App\Helpers\Logger;
+use App\Http\Controllers\BookingEventController;
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\MaxController;
 use App\Http\Controllers\ReviewController;
@@ -16,12 +17,30 @@ require_once __DIR__ . '/../src/bootstrap.php';
 $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) ?: '/';
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
+$redactSensitiveData = static function (mixed $value) use (&$redactSensitiveData): mixed {
+    if (!is_array($value)) {
+        return $value;
+    }
+
+    $redacted = [];
+    foreach ($value as $key => $item) {
+        $normalizedKey = strtolower((string) $key);
+        if (str_contains($normalizedKey, 'token') || $normalizedKey === 'authorization') {
+            $redacted[$key] = '[redacted]';
+            continue;
+        }
+        $redacted[$key] = $redactSensitiveData($item);
+    }
+
+    return $redacted;
+};
+
 Logger::info('Входящий запрос', [
     'uri'       => $uri,
     'method'    => $method,
-    'ip'        => $_SERVER['REMOTE_ADDR'],
-    'query'     => $_GET,
-    'post'      => $_POST,
+    'ip'        => $_SERVER['REMOTE_ADDR'] ?? null,
+    'query'     => $redactSensitiveData($_GET),
+    'post'      => $redactSensitiveData($_POST),
     'userAgent' => $_SERVER['HTTP_USER_AGENT'] ?? null,
     'referer'   => $_SERVER['HTTP_REFERER'] ?? null,
 ]);
@@ -30,6 +49,14 @@ try {
     /** @var Container $container */
 
     switch ($uri) {
+        case '/api/b24/booking/events':
+            if ($method === 'POST') {
+                Middleware::check();
+            }
+            $bookingEventController = $container->get(BookingEventController::class);
+            $bookingEventController->handle();
+            break;
+
         case '/api/b24/contacts/import-birthdate':
             if ($method == 'POST') {
                 Middleware::check();

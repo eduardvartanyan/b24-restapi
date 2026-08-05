@@ -11,13 +11,22 @@ class Middleware
     {
         $headers = getallheaders();
 
-        Logger::info('Заголовки запроса', ['headers' => $headers]);
+        $headersForLog = [];
+        foreach ($headers as $name => $value) {
+            $normalizedName = strtolower((string) $name);
+            $headersForLog[$name] = str_contains($normalizedName, 'token')
+                || $normalizedName === 'authorization'
+                ? '[redacted]'
+                : $value;
+        }
+
+        Logger::info('Заголовки запроса', ['headers' => $headersForLog]);
 
         $token = $headers['Token'] ?? $_GET['token'] ?? $_GET['Token'] ?? null;
 
         if ($token === null || trim((string)$token) === '') {
             http_response_code(401);
-            echo json_encode(['error' => 'Осутствует токен'], JSON_UNESCAPED_UNICODE);
+            echo json_encode(['error' => 'Отсутствует токен'], JSON_UNESCAPED_UNICODE);
             exit;
         }
 

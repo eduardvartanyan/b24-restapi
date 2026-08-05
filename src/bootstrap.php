@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\ImportController;
+use App\Http\Controllers\BookingEventController;
 use App\Http\Controllers\MaxController;
 use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\TgController;
@@ -9,6 +10,7 @@ use App\Repositories\ChatRequestRepository;
 use App\Repositories\ChatSourceRepository;
 use App\Repositories\ChatStateRepository;
 use App\Repositories\ClickRepository;
+use App\Handlers\BookingEventHandler;
 use App\Services\B24Service;
 use App\Services\DaDataService;
 use App\Services\DailyImportService;
@@ -26,6 +28,10 @@ $dotenv = Dotenv::createImmutable(__DIR__ . '/..');
 $dotenv->load();
 
 $container = new Container();
+$container->set(BookingEventHandler::class,      fn() => new BookingEventHandler());
+$container->set(BookingEventController::class,   fn() => new BookingEventController(
+    $container->get(BookingEventHandler::class)
+));
 $container->set(B24Service::class,              fn() => new B24Service($container->get(ServiceBuilder::class)));
 $container->set(ReviewService::class,           fn() => new ReviewService(
     $container->get(B24Service::class),
