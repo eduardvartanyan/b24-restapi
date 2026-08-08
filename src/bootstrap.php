@@ -6,12 +6,15 @@ use App\Http\Controllers\BookingEventController;
 use App\Http\Controllers\MaxController;
 use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\TgController;
+use App\Booking\BookingAutomationConfig;
+use App\Contracts\BookingAutomationGateway;
 use App\Repositories\ChatRequestRepository;
 use App\Repositories\ChatSourceRepository;
 use App\Repositories\ChatStateRepository;
 use App\Repositories\ClickRepository;
 use App\Handlers\BookingEventHandler;
 use App\Services\B24Service;
+use App\Services\Bitrix24BookingAutomationGateway;
 use App\Services\DaDataService;
 use App\Services\DailyImportService;
 use App\Services\MaxService;
@@ -28,7 +31,15 @@ $dotenv = Dotenv::createImmutable(__DIR__ . '/..');
 $dotenv->load();
 
 $container = new Container();
-$container->set(BookingEventHandler::class,      fn() => new BookingEventHandler());
+$container->set(BookingAutomationConfig::class, fn() => BookingAutomationConfig::fromEnvironment($_ENV));
+$container->set(BookingAutomationGateway::class, fn() => new Bitrix24BookingAutomationGateway(
+    $container->get(ServiceBuilder::class),
+    $container->get(BookingAutomationConfig::class),
+));
+$container->set(BookingEventHandler::class,      fn() => new BookingEventHandler(
+    $container->get(BookingAutomationGateway::class),
+    $container->get(BookingAutomationConfig::class),
+));
 $container->set(BookingEventController::class,   fn() => new BookingEventController(
     $container->get(BookingEventHandler::class)
 ));

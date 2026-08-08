@@ -250,5 +250,18 @@ try {
 
     }
 } catch (Throwable $e) {
-    echo $e->getMessage();
+    Logger::error('Необработанная ошибка входящего запроса', [
+        'uri' => $uri,
+        'method' => $method,
+        'error_class' => $e::class,
+        'message' => $e->getMessage(),
+        'file' => $e->getFile(),
+        'line' => $e->getLine(),
+    ]);
+
+    if (!headers_sent()) {
+        http_response_code(500);
+        header('Content-Type: application/json; charset=utf-8');
+    }
+    echo json_encode(['error' => 'Internal Server Error'], JSON_UNESCAPED_UNICODE);
 }
