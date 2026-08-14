@@ -6,8 +6,14 @@ namespace App\Services;
 use App\Booking\Booking;
 use App\Booking\BookingAutomationConfig;
 use App\Booking\BookingDataException;
+use App\Booking\BookingSignature;
+use App\Booking\ControlTask;
 use App\Booking\DealBookingState;
+use App\Booking\MasterTask;
+use App\Booking\MaxRecipient;
+use App\Booking\NotificationRecipient;
 use App\Booking\ResourceAssignment;
+use App\Booking\ServiceStation;
 use App\Contracts\BookingAutomationGateway;
 use Bitrix24\SDK\Core\Exceptions\BaseException;
 use Bitrix24\SDK\Core\Exceptions\ItemNotFoundException;
@@ -24,6 +30,7 @@ final class Bitrix24BookingAutomationGateway implements BookingAutomationGateway
     public function __construct(
         private readonly ServiceBuilder $b24,
         private readonly BookingAutomationConfig $config,
+        private readonly MaxService $maxService,
     ) {
     }
 
@@ -113,15 +120,20 @@ final class Bitrix24BookingAutomationGateway implements BookingAutomationGateway
     public function getDealBookingState(int $dealId): DealBookingState
     {
         $deal = $this->call('crm.deal.get', ['id' => $dealId]);
+        $resolvedDealId = $this->positiveInt($deal['ID'] ?? null, 'CRM-сделка не найдена');
 
         return new DealBookingState(
-            dealId: $this->positiveInt($deal['ID'] ?? null, 'CRM-сделка не найдена'),
+            dealId: $resolvedDealId,
             responsibleUserId: $this->positiveInt(
                 $deal['ASSIGNED_BY_ID'] ?? null,
                 'В CRM-сделке не указан ответственный',
             ),
             currentBookingId: $this->nullablePositiveInt($deal[$this->config->currentBookingField] ?? null),
             masterTaskId: $this->nullablePositiveInt($deal[$this->config->masterTaskField] ?? null),
+            contactId: $this->resolveDealContactId($resolvedDealId, $deal),
+            bookingSignature: $this->nullableString($deal[$this->config->bookingSignatureField] ?? null),
+            serviceStationReference: $this->nullableString($deal[$this->config->dealServiceStationField] ?? null),
+            controlTaskId: $this->nullablePositiveInt($deal[$this->config->controlTaskField] ?? null),
         );
     }
 
@@ -180,22 +192,7 @@ final class Bitrix24BookingAutomationGateway implements BookingAutomationGateway
 
     public function assertMasterCanReceiveTask(int $userId): void
     {
-        $users = $this->call('user.get', [
-            'FILTER' => ['ID' => $userId],
-            'ADMIN_MODE' => true,
-        ]);
-
-        $user = null;
-        foreach ($users as $candidate) {
-            if (is_array($candidate) && (int) ($candidate['ID'] ?? 0) === $userId) {
-                $user = $candidate;
-                break;
-            }
-        }
-
-        if ($user === null) {
-            throw new BookingDataException(sprintf('Экстранет-пользователь %d не найден', $userId));
-        }
+        $user = $this->getUser($userId);
 
         if (!in_array($user['ACTIVE'] ?? null, [true, 1, '1', 'Y'], true)) {
             throw new BookingDataException(sprintf('Экстранет-пользователь %d неактивен', $userId));
@@ -206,9 +203,10 @@ final class Bitrix24BookingAutomationGateway implements BookingAutomationGateway
             throw new BookingDataException(sprintf('Пользователь %d не является экстранет-пользователем', $userId));
         }
 
-        if (trim((string) ($user['PERSONAL_MOBILE'] ?? '')) === '') {
-            throw new BookingDataException(sprintf('У экстранет-пользователя %d не указан мобильный телефон', $userId));
-        }
+        $this->positiveInt(
+            $user[$this->config->masterMaxIdField] ?? null,
+            sprintf('У экстранет-пользователя %d не указан корректный Max ID', $userId),
+        );
     }
 
     public function setCurrentBookingId(int $dealId, ?int $bookingId): void
@@ -216,6 +214,13 @@ final class Bitrix24BookingAutomationGateway implements BookingAutomationGateway
         $this->call('crm.deal.update', [
             'id' => $dealId,
             'fields' => [$this->config->currentBookingField => $bookingId === null ? '' : (string) $bookingId],
+        ]);
+    }
+
+    public function setBookingSignature(int $dealId, ?string $signature): void
+    {
+        $this->updateDeal($dealId, [
+            $this->config->bookingSignatureField => $signature === null ? '' : $signature,
         ]);
     }
 
@@ -229,6 +234,225 @@ final class Bitrix24BookingAutomationGateway implements BookingAutomationGateway
                 'date_from' => $booking->startsAt->format(DateTimeInterface::ATOM),
                 'date_to' => $booking->endsAt->format(DateTimeInterface::ATOM),
             ],
+        ]);
+    }
+
+    public function getMasterTask(int $taskId): MasterTask
+    {
+        $result = $this->call('tasks.task.get', [
+            'taskId' => $taskId,
+            'select' => ['ID', 'RESPONSIBLE_ID', 'DESCRIPTION'],
+        ]);
+        $task = $this->array($result['task'] ?? null, sprintf('Задача мастера %d не найдена', $taskId));
+
+        return new MasterTask(
+            id: $this->positiveInt($task['id'] ?? $task['ID'] ?? null, 'Некорректный ID задачи мастера'),
+            responsibleUserId: $this->positiveInt(
+                $task['responsibleId'] ?? $task['RESPONSIBLE_ID'] ?? null,
+                'В задаче мастера не указан исполнитель',
+            ),
+            description: (string) ($task['description'] ?? $task['DESCRIPTION'] ?? ''),
+        );
+    }
+
+    public function getControlTask(int $taskId): ControlTask
+    {
+        $result = $this->call('tasks.task.get', [
+            'taskId' => $taskId,
+            'select' => ['ID', 'DESCRIPTION', 'DEADLINE'],
+        ]);
+        $task = $this->array($result['task'] ?? null, sprintf('Контрольная задача %d не найдена', $taskId));
+        $deadline = $this->nullableDateTime($task['deadline'] ?? $task['DEADLINE'] ?? null);
+
+        return new ControlTask(
+            id: $this->positiveInt($task['id'] ?? $task['ID'] ?? null, 'Некорректный ID контрольной задачи'),
+            description: (string) ($task['description'] ?? $task['DESCRIPTION'] ?? ''),
+            deadline: $deadline,
+        );
+    }
+
+    public function getServiceStation(string $reference): ServiceStation
+    {
+        $companyId = $this->crmEntityId($reference, 'CO_', 'СТОА');
+        $company = $this->call('crm.company.get', ['id' => $companyId]);
+
+        return new ServiceStation(
+            reference: 'CO_' . $companyId,
+            name: $this->requiredString($company['TITLE'] ?? null, 'В карточке СТОА отсутствует название'),
+            address: $this->resolveCompanyAddress($companyId, $company),
+        );
+    }
+
+    public function getMasterRecipient(int $userId): MaxRecipient
+    {
+        $user = $this->getUser($userId);
+
+        return new MaxRecipient(
+            userId: $this->positiveInt(
+                $user[$this->config->masterMaxIdField] ?? null,
+                sprintf('У экстранет-пользователя %d не указан корректный Max ID', $userId),
+            ),
+            name: trim(implode(' ', array_filter([
+                (string) ($user['NAME'] ?? ''),
+                (string) ($user['LAST_NAME'] ?? ''),
+            ]))),
+        );
+    }
+
+    public function getClientRecipient(int $contactId): ?NotificationRecipient
+    {
+        $contact = $this->call('crm.contact.get', ['id' => $contactId]);
+        $phones = (array) ($contact['PHONE'] ?? []);
+        foreach ($phones as $phone) {
+            $value = trim((string) (is_array($phone) ? ($phone['VALUE'] ?? '') : $phone));
+            if ($value !== '') {
+                return new NotificationRecipient($value);
+            }
+        }
+
+        return null;
+    }
+
+    public function updateMasterTask(
+        MasterTask $task,
+        int $responsibleUserId,
+        Booking $booking,
+        ServiceStation $serviceStation,
+    ): void {
+        $description = $this->replaceTaskLine($task->description, 'СТОА:', $serviceStation->displayName());
+        $description = $this->replaceTaskLine(
+            $description,
+            'Дата и время:',
+            $booking->startsAt->format('d.m.Y H:i:s'),
+        );
+
+        $this->call('tasks.task.update', [
+            'taskId' => $task->id,
+            'fields' => [
+                'RESPONSIBLE_ID' => $responsibleUserId,
+                'DESCRIPTION' => $description,
+                'DEADLINE' => $booking->endsAt->format(DateTimeInterface::ATOM),
+            ],
+        ]);
+    }
+
+    public function addMasterTaskComment(int $taskId, string $message): void
+    {
+        $this->call('task.commentitem.add', [
+            'TASKID' => $taskId,
+            'FIELDS' => ['POST_MESSAGE' => $message],
+        ]);
+    }
+
+    public function updateControlTask(
+        ControlTask $task,
+        Booking $booking,
+        BookingSignature $previousBooking,
+    ): void {
+        $fields = [
+            'DESCRIPTION' => $this->replaceTaskLine(
+                $task->description,
+                'Дата и время дефектовки:',
+                $booking->startsAt->format('d.m.Y H:i:s'),
+            ),
+        ];
+
+        if ($task->deadline !== null) {
+            $deadlineShift = $booking->endsAt->getTimestamp() - $previousBooking->endsAt->getTimestamp();
+            $fields['DEADLINE'] = $task->deadline
+                ->modify(sprintf('%+d seconds', $deadlineShift))
+                ->format(DateTimeInterface::ATOM);
+        }
+
+        $this->call('tasks.task.update', [
+            'taskId' => $task->id,
+            'fields' => $fields,
+        ]);
+    }
+
+    public function addControlTaskComment(int $taskId, string $message): void
+    {
+        $this->addMasterTaskComment($taskId, $message);
+    }
+
+    public function updateDealServiceStation(int $dealId, string $reference): void
+    {
+        $this->updateDeal($dealId, [$this->config->dealServiceStationField => $reference]);
+    }
+
+    public function addDealTimelineComment(int $dealId, string $message): void
+    {
+        $this->call('crm.timeline.comment.add', [
+            'fields' => [
+                'ENTITY_ID' => $dealId,
+                'ENTITY_TYPE' => 'deal',
+                'COMMENT' => $message,
+            ],
+        ]);
+    }
+
+    public function sendCascadeMessage(int $contactId, NotificationRecipient $recipient, string $message): void
+    {
+        try {
+            $this->startContactWorkflow($contactId, $this->config->contactCascadeWorkflowTemplateId, [
+                'number' => $recipient->phone,
+                'text' => $message,
+            ]);
+        } catch (\Throwable $e) {
+            throw new \RuntimeException(sprintf(
+                'Не удалось запустить каскадный процесс %d для контакта %d: %s',
+                $this->config->contactCascadeWorkflowTemplateId,
+                $contactId,
+                $e->getMessage(),
+            ), (int) $e->getCode(), $e);
+        }
+    }
+
+    public function sendMaxMessage(MaxRecipient $recipient, string $message): void
+    {
+        $result = $this->maxService->sendMessage(message: $message, userId: $recipient->userId);
+        if (($result['status'] ?? 500) < 200 || ($result['status'] ?? 500) >= 300) {
+            throw new \RuntimeException(sprintf(
+                'Не удалось отправить сообщение пользователю MAX %d: %s',
+                $recipient->userId,
+                (string) ($result['body'] ?? 'неизвестная ошибка'),
+            ));
+        }
+    }
+
+    public function rescheduleMasterReminder(
+        int $dealId,
+        MaxRecipient $recipient,
+        int $taskId,
+        Booking $booking,
+        string $message,
+    ): void {
+        $this->terminateDealWorkflows($dealId, $this->config->masterReminderWorkflowTemplateId);
+        $this->startDealWorkflow($dealId, $this->config->masterReminderWorkflowTemplateId, [
+            // Идентификатор параметра сохранен для совместимости с настроенным процессом 738.
+            'number' => (string) $recipient->userId,
+            'text' => $message,
+            'pause_to' => $booking->endsAt->modify('+1 hour')->format(DateTimeInterface::ATOM),
+            'task_id' => $taskId,
+        ]);
+    }
+
+    public function rescheduleClientReminder(
+        int $dealId,
+        ?NotificationRecipient $recipient,
+        Booking $booking,
+        string $message,
+    ): void {
+        $this->terminateDealWorkflows($dealId, $this->config->clientReminderWorkflowTemplateId);
+        $sendAt = $booking->startsAt->modify('-24 hours');
+        if ($recipient === null || $sendAt <= new DateTimeImmutable()) {
+            return;
+        }
+
+        $this->startDealWorkflow($dealId, $this->config->clientReminderWorkflowTemplateId, [
+            'number' => $recipient->phone,
+            'text' => $message,
+            'pause_to' => $sendAt->format(DateTimeInterface::ATOM),
         ]);
     }
 
@@ -251,6 +475,227 @@ final class Bitrix24BookingAutomationGateway implements BookingAutomationGateway
             'USER_ID' => $deal->responsibleUserId,
             'MESSAGE' => $message,
         ]);
+    }
+
+    private function getUser(int $userId): array
+    {
+        $users = $this->call('user.get', [
+            'FILTER' => ['ID' => $userId],
+            'ADMIN_MODE' => true,
+        ]);
+
+        foreach ($users as $candidate) {
+            if (is_array($candidate) && (int) ($candidate['ID'] ?? 0) === $userId) {
+                return $candidate;
+            }
+        }
+
+        throw new BookingDataException(sprintf('Экстранет-пользователь %d не найден', $userId));
+    }
+
+    private function resolveCompanyAddress(int $companyId, array $company): string
+    {
+        $address = $this->formatAddress([
+            $company['ADDRESS'] ?? null,
+            $company['ADDRESS_2'] ?? null,
+            $company['ADDRESS_CITY'] ?? null,
+            $company['ADDRESS_REGION'] ?? null,
+            $company['ADDRESS_PROVINCE'] ?? null,
+            $company['ADDRESS_COUNTRY'] ?? null,
+            $company['ADDRESS_POSTAL_CODE'] ?? null,
+        ]);
+        if ($address !== '') {
+            return $address;
+        }
+
+        $requisites = $this->call('crm.requisite.list', [
+            'select' => ['ID'],
+            'filter' => [
+                'ENTITY_TYPE_ID' => 4,
+                'ENTITY_ID' => $companyId,
+            ],
+            'order' => ['SORT' => 'ASC', 'ID' => 'ASC'],
+        ]);
+
+        foreach ($requisites as $requisite) {
+            if (!is_array($requisite)) {
+                continue;
+            }
+
+            $requisiteId = $this->nullablePositiveInt($requisite['ID'] ?? null);
+            if ($requisiteId === null) {
+                continue;
+            }
+
+            $addresses = $this->call('crm.address.list', [
+                'select' => [
+                    'TYPE_ID',
+                    'ADDRESS_1',
+                    'ADDRESS_2',
+                    'CITY',
+                    'REGION',
+                    'PROVINCE',
+                    'COUNTRY',
+                    'POSTAL_CODE',
+                ],
+                'filter' => [
+                    'ENTITY_TYPE_ID' => 8,
+                    'ENTITY_ID' => $requisiteId,
+                ],
+                'order' => ['TYPE_ID' => 'ASC'],
+            ]);
+
+            foreach ($addresses as $candidate) {
+                if (!is_array($candidate)) {
+                    continue;
+                }
+
+                $address = $this->formatAddress([
+                    $candidate['ADDRESS_1'] ?? null,
+                    $candidate['ADDRESS_2'] ?? null,
+                    $candidate['CITY'] ?? null,
+                    $candidate['REGION'] ?? null,
+                    $candidate['PROVINCE'] ?? null,
+                    $candidate['COUNTRY'] ?? null,
+                    $candidate['POSTAL_CODE'] ?? null,
+                ]);
+                if ($address !== '') {
+                    return $address;
+                }
+            }
+        }
+
+        throw new BookingDataException(sprintf('В карточке СТОА %d отсутствует адрес', $companyId));
+    }
+
+    private function formatAddress(array $parts): string
+    {
+        $normalized = [];
+        foreach ($parts as $part) {
+            $part = trim((string) $part);
+            if ($part !== '' && !in_array($part, $normalized, true)) {
+                $normalized[] = $part;
+            }
+        }
+
+        return implode(', ', $normalized);
+    }
+
+    private function resolveDealContactId(int $dealId, array $deal): ?int
+    {
+        $contactId = $this->nullablePositiveInt($deal['CONTACT_ID'] ?? null);
+        if ($contactId !== null) {
+            return $contactId;
+        }
+
+        $contactIds = array_values(array_unique(array_filter(array_map(
+            fn(mixed $value): ?int => $this->nullablePositiveInt($value),
+            (array) ($deal['CONTACT_IDS'] ?? []),
+        ))));
+        if (count($contactIds) === 1) {
+            return $contactIds[0];
+        }
+
+        $items = $this->call('crm.deal.contact.items.get', ['id' => $dealId]);
+        $primaryIds = [];
+        $allIds = [];
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $itemContactId = $this->nullablePositiveInt($item['CONTACT_ID'] ?? null);
+            if ($itemContactId === null) {
+                continue;
+            }
+
+            $allIds[] = $itemContactId;
+            if (in_array($item['IS_PRIMARY'] ?? null, [true, 1, '1', 'Y'], true)) {
+                $primaryIds[] = $itemContactId;
+            }
+        }
+
+        $primaryIds = array_values(array_unique($primaryIds));
+        if (count($primaryIds) === 1) {
+            return $primaryIds[0];
+        }
+
+        $allIds = array_values(array_unique($allIds));
+        if (count($allIds) === 1) {
+            return $allIds[0];
+        }
+        if ($allIds === []) {
+            return null;
+        }
+
+        throw new BookingDataException(sprintf(
+            'У сделки %d несколько связанных контактов, но основной контакт не определен',
+            $dealId,
+        ));
+    }
+
+    private function updateDeal(int $dealId, array $fields): void
+    {
+        $this->call('crm.deal.update', ['id' => $dealId, 'fields' => $fields]);
+    }
+
+    private function startDealWorkflow(int $dealId, int $templateId, array $parameters): void
+    {
+        $this->call('bizproc.workflow.start', [
+            'TEMPLATE_ID' => $templateId,
+            'DOCUMENT_ID' => ['crm', 'CCrmDocumentDeal', 'DEAL_' . $dealId],
+            'PARAMETERS' => $parameters,
+        ]);
+    }
+
+    private function startContactWorkflow(int $contactId, int $templateId, array $parameters): void
+    {
+        $this->call('bizproc.workflow.start', [
+            'TEMPLATE_ID' => $templateId,
+            'DOCUMENT_ID' => ['crm', 'CCrmDocumentContact', 'CONTACT_' . $contactId],
+            'PARAMETERS' => $parameters,
+        ]);
+    }
+
+    private function terminateDealWorkflows(int $dealId, int $templateId): void
+    {
+        $instances = $this->call('bizproc.workflow.instances', [
+            'SELECT' => ['ID'],
+            'FILTER' => [
+                'MODULE_ID' => 'crm',
+                'ENTITY' => 'CCrmDocumentDeal',
+                'DOCUMENT_ID' => 'DEAL_' . $dealId,
+                'TEMPLATE_ID' => $templateId,
+            ],
+        ]);
+
+        foreach ($instances as $instance) {
+            $id = trim((string) (is_array($instance) ? ($instance['ID'] ?? '') : ''));
+            if ($id !== '') {
+                $this->call('bizproc.workflow.terminate', [
+                    'ID' => $id,
+                    'STATUS' => 'Онлайн-запись изменена, ожидание устарело.',
+                ]);
+            }
+        }
+    }
+
+    private function replaceTaskLine(string $description, string $label, string $value): string
+    {
+        $pattern = '/^' . preg_quote($label, '/') . '.*$/mu';
+        $replacement = $label . ' ' . $value;
+        if (preg_match($pattern, $description) === 1) {
+            return (string) preg_replace($pattern, $replacement, $description, 1);
+        }
+
+        return $replacement . PHP_EOL . $description;
+    }
+
+    private function crmEntityId(string $reference, string $prefix, string $label): int
+    {
+        $value = preg_replace('/^' . preg_quote($prefix, '/') . '/i', '', trim($reference));
+
+        return $this->positiveInt($value, sprintf('Некорректная привязка к карточке %s', $label));
     }
 
     /** @return array{listId: int, resource: string, stoa: string, user: string, active: ?string} */
@@ -387,6 +832,20 @@ final class Bitrix24BookingAutomationGateway implements BookingAutomationGateway
         return (new DateTimeImmutable('@' . $timestamp))->setTimezone($timezone);
     }
 
+    private function nullableDateTime(mixed $value): ?DateTimeImmutable
+    {
+        $value = trim((string) $value);
+        if ($value === '') {
+            return null;
+        }
+
+        try {
+            return new DateTimeImmutable($value);
+        } catch (\Throwable) {
+            throw new BookingDataException('В задаче указан некорректный крайний срок');
+        }
+    }
+
     private function call(string $method, array $parameters): array
     {
         return $this->b24->core
@@ -421,6 +880,13 @@ final class Bitrix24BookingAutomationGateway implements BookingAutomationGateway
         }
 
         return $this->positiveInt($value, 'Некорректное значение технического поля сделки');
+    }
+
+    private function nullableString(mixed $value): ?string
+    {
+        $value = trim((string) $value);
+
+        return $value === '' ? null : $value;
     }
 
     private function requiredString(mixed $value, string $message): string

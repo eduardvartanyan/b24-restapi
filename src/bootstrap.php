@@ -35,6 +35,7 @@ $container->set(BookingAutomationConfig::class, fn() => BookingAutomationConfig:
 $container->set(BookingAutomationGateway::class, fn() => new Bitrix24BookingAutomationGateway(
     $container->get(ServiceBuilder::class),
     $container->get(BookingAutomationConfig::class),
+    $container->get(MaxService::class),
 ));
 $container->set(BookingEventHandler::class,      fn() => new BookingEventHandler(
     $container->get(BookingAutomationGateway::class),

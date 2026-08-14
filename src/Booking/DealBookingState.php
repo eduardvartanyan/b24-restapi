@@ -10,6 +10,10 @@ final readonly class DealBookingState
         public int $responsibleUserId,
         public ?int $currentBookingId,
         public ?int $masterTaskId,
+        public ?int $contactId = null,
+        public ?string $bookingSignature = null,
+        public ?string $serviceStationReference = null,
+        public ?int $controlTaskId = null,
     ) {
     }
 }

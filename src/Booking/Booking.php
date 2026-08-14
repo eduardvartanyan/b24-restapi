@@ -14,4 +14,9 @@ final readonly class Booking
         public DateTimeImmutable $endsAt,
     ) {
     }
+
+    public function signature(): BookingSignature
+    {
+        return BookingSignature::fromBooking($this);
+    }
 }
