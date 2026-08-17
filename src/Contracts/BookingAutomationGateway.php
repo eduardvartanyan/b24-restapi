@@ -23,6 +23,8 @@ interface BookingAutomationGateway
 
     public function getDealBookingState(int $dealId): DealBookingState;
 
+    public function findDealBookingStateByCurrentBookingId(int $bookingId): ?DealBookingState;
+
     public function findResourceAssignment(int $resourceId): ResourceAssignment;
 
     public function assertMasterCanReceiveTask(int $userId): void;
@@ -59,6 +61,12 @@ interface BookingAutomationGateway
     ): void;
 
     public function addControlTaskComment(int $taskId, string $message): void;
+
+    public function completeTaskWithComment(int $taskId, string $message): void;
+
+    public function cancelBookingWorkflows(int $dealId): void;
+
+    public function resetDealAfterBookingDeletion(int $dealId): void;
 
     public function updateDealServiceStation(int $dealId, string $reference): void;
 

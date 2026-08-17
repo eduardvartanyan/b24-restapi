@@ -16,6 +16,7 @@ final readonly class BookingAutomationConfig
         public int $contactCascadeWorkflowTemplateId = 744,
         public int $masterReminderWorkflowTemplateId = 738,
         public int $clientReminderWorkflowTemplateId = 740,
+        public string $bookingSelectionStageName = 'Запись на дефектовку',
         public string $taskUrlTemplate = 'https://fs911.bitrix24.ru/workgroups/group/44/tasks/task/view/%d/',
         public string $resourceListName = 'Связь ресурсов СТОА',
         public ?int $resourceListId = null,
@@ -44,6 +45,8 @@ final readonly class BookingAutomationConfig
             ) ?? 744,
             masterReminderWorkflowTemplateId: self::positiveInt($environment['B24_MASTER_REMINDER_WORKFLOW_TEMPLATE_ID'] ?? null) ?? 738,
             clientReminderWorkflowTemplateId: self::positiveInt($environment['B24_CLIENT_REMINDER_WORKFLOW_TEMPLATE_ID'] ?? null) ?? 740,
+            bookingSelectionStageName: self::string($environment['B24_BOOKING_SELECTION_STAGE_NAME'] ?? null)
+                ?? 'Запись на дефектовку',
             taskUrlTemplate: self::string($environment['B24_BOOKING_TASK_URL_TEMPLATE'] ?? null)
                 ?? 'https://fs911.bitrix24.ru/workgroups/group/44/tasks/task/view/%d/',
             resourceListName: self::string($environment['B24_BOOKING_RESOURCE_LIST_NAME'] ?? null) ?? 'Связь ресурсов СТОА',

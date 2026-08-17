@@ -466,7 +466,208 @@ final readonly class BookingEventHandler
 
     private function handleBookingDeleted(array $context): void
     {
-        Logger::info('B24 booking deleted', $context);
+        $deal = null;
+
+        try {
+            $deal = $this->gateway->findDealBookingStateByCurrentBookingId($context['booking_id']);
+            if ($deal === null) {
+                Logger::info('B24 booking delete ignored for non-current booking', $context);
+                return;
+            }
+
+            $this->withDealLock($deal->dealId, function () use ($context, &$deal): void {
+                $deal = $this->gateway->getDealBookingState($deal->dealId);
+                if ($deal->currentBookingId !== $context['booking_id']) {
+                    Logger::info('B24 booking delete ignored after deal state refresh', $context + [
+                        'deal_id' => $deal->dealId,
+                        'current_booking_id' => $deal->currentBookingId,
+                    ]);
+                    return;
+                }
+
+                $message = sprintf(
+                    'Онлайн-запись #%d удалена. Связанные задачи завершены, ожидающие напоминания отменены, сделка возвращена на стадию "Запись на дефектовку".',
+                    $context['booking_id'],
+                );
+                $errors = [];
+                $task = null;
+                $signature = null;
+                $station = null;
+                $master = null;
+                $client = null;
+
+                if ($deal->masterTaskId === null) {
+                    $errors[] = 'уведомления: в сделке отсутствует ID задачи мастера';
+                } else {
+                    $this->runDeleteSideEffect(
+                        'получение задачи мастера',
+                        function () use ($deal, &$task): void {
+                            $task = $this->gateway->getMasterTask($deal->masterTaskId);
+                        },
+                        $errors,
+                        $context,
+                    );
+                }
+                $this->runDeleteSideEffect(
+                    'получение сигнатуры онлайн-записи',
+                    function () use ($deal, &$signature): void {
+                        $signature = BookingSignature::parse($deal->bookingSignature);
+                    },
+                    $errors,
+                    $context,
+                );
+                if ($signature === null) {
+                    $errors[] = 'уведомления: в сделке отсутствует корректная сигнатура онлайн-записи';
+                }
+                if ($deal->serviceStationReference === null) {
+                    $errors[] = 'уведомление клиента: в сделке не указана СТОА';
+                } else {
+                    $this->runDeleteSideEffect(
+                        'получение СТОА',
+                        function () use ($deal, &$station): void {
+                            $station = $this->gateway->getServiceStation($deal->serviceStationReference);
+                        },
+                        $errors,
+                        $context,
+                    );
+                }
+                if ($task !== null) {
+                    $this->runDeleteSideEffect(
+                        'получение получателя MAX',
+                        function () use ($task, &$master): void {
+                            $master = $this->gateway->getMasterRecipient($task->responsibleUserId);
+                        },
+                        $errors,
+                        $context,
+                    );
+                }
+                if ($deal->contactId === null) {
+                    $errors[] = 'уведомление клиента: основной контакт не найден';
+                } else {
+                    $this->runDeleteSideEffect(
+                        'получение телефона клиента',
+                        function () use ($deal, &$client): void {
+                            $client = $this->gateway->getClientRecipient($deal->contactId);
+                        },
+                        $errors,
+                        $context,
+                    );
+                    if ($client === null) {
+                        $errors[] = 'уведомление клиента: у основного контакта отсутствует телефон';
+                    }
+                }
+
+                $this->runDeleteSideEffect(
+                    'остановка процессов онлайн-записи',
+                    fn() => $this->gateway->cancelBookingWorkflows($deal->dealId),
+                    $errors,
+                    $context,
+                );
+                if ($task !== null && $signature !== null && $master !== null) {
+                    $this->runDeleteSideEffect(
+                        'уведомление мастера об отмене',
+                        fn() => $this->gateway->sendMaxMessage(
+                            $master,
+                            $this->masterDeleteMessage($task, $signature),
+                        ),
+                        $errors,
+                        $context,
+                    );
+                }
+                if ($task !== null
+                    && $signature !== null
+                    && $station !== null
+                    && $client !== null
+                    && $deal->contactId !== null) {
+                    $this->runDeleteSideEffect(
+                        'уведомление клиента об отмене',
+                        fn() => $this->gateway->sendCascadeMessage(
+                            $deal->contactId,
+                            $client,
+                            $this->clientDeleteMessage($task, $signature, $station),
+                        ),
+                        $errors,
+                        $context,
+                    );
+                }
+                foreach (array_unique(array_filter([$deal->masterTaskId, $deal->controlTaskId])) as $taskId) {
+                    $this->runDeleteSideEffect(
+                        sprintf('завершение задачи %d', $taskId),
+                        fn() => $this->gateway->completeTaskWithComment($taskId, $message),
+                        $errors,
+                        $context,
+                    );
+                }
+                $this->gateway->resetDealAfterBookingDeletion($deal->dealId);
+
+                if ($errors !== []) {
+                    $message .= ' Не выполнены действия: ' . implode('; ', $errors) . '.';
+                }
+                $this->safeReportDealProblem($deal, $message, $context);
+
+                Logger::info('B24 current booking deleted and deal state cleared', $context + [
+                    'deal_id' => $deal->dealId,
+                    'master_task_id' => $deal->masterTaskId,
+                    'control_task_id' => $deal->controlTaskId,
+                    'side_effect_errors' => $errors,
+                ]);
+            });
+        } catch (BookingDataException $e) {
+            $this->safeReportDealProblem($deal, $e->getMessage(), $context);
+            Logger::error('B24 booking delete rejected', $context + ['message' => $e->getMessage()]);
+        } catch (Throwable $e) {
+            $this->safeReportDealProblem(
+                $deal,
+                sprintf('Ошибка удаления онлайн-записи #%d: %s', $context['booking_id'], $e->getMessage()),
+                $context,
+            );
+            throw $e;
+        }
+    }
+
+    private function masterDeleteMessage(MasterTask $task, BookingSignature $signature): string
+    {
+        return sprintf(
+            "Назначенная вам дефектовка автомобиля %s, %s отменена.\n\nДата и время: %s\nПричина: онлайн-запись удалена.",
+            $this->taskValue($task, 'ТС:'),
+            $this->taskValue($task, 'Г/н:'),
+            $signature->startsAt->format('d.m.Y H:i'),
+        );
+    }
+
+    private function clientDeleteMessage(
+        MasterTask $task,
+        BookingSignature $signature,
+        ServiceStation $station,
+    ): string {
+        return sprintf(
+            "Ваша запись на дефектовку автомобиля %s, %s отменена.\n\nДата и время: %s\nСТОА: %s\nАдрес: %s\n\nДля новой записи с вами свяжется менеджер Форсайта.",
+            $this->taskValue($task, 'ТС:'),
+            $this->taskValue($task, 'Г/н:'),
+            $signature->startsAt->format('d.m.Y H:i'),
+            $station->name,
+            $station->address,
+        );
+    }
+
+    private function runDeleteSideEffect(
+        string $label,
+        callable $callback,
+        array &$errors,
+        array $context,
+    ): void {
+        try {
+            $callback();
+        } catch (Throwable $e) {
+            $details = trim($e->getMessage());
+            $errors[] = $details === '' ? $label : sprintf('%s: %s', $label, $details);
+            Logger::error('B24 booking delete side effect failed', $context + [
+                'action' => $label,
+                'message' => $e->getMessage(),
+                'exception' => $e::class,
+                'code' => $e->getCode(),
+            ]);
+        }
     }
 
     private function withDealLock(int $dealId, callable $callback): void

@@ -137,6 +137,52 @@ final class Bitrix24BookingAutomationGateway implements BookingAutomationGateway
         );
     }
 
+    public function findDealBookingStateByCurrentBookingId(int $bookingId): ?DealBookingState
+    {
+        $deals = $this->call('crm.deal.list', [
+            'select' => [
+                'ID',
+                'ASSIGNED_BY_ID',
+                $this->config->currentBookingField,
+                $this->config->masterTaskField,
+                $this->config->controlTaskField,
+                $this->config->bookingSignatureField,
+                $this->config->dealServiceStationField,
+            ],
+            'filter' => [$this->config->currentBookingField => $bookingId],
+        ]);
+
+        $matches = array_values(array_filter(
+            $deals,
+            static fn(mixed $deal): bool => is_array($deal),
+        ));
+        if ($matches === []) {
+            return null;
+        }
+        if (count($matches) !== 1) {
+            throw new BookingDataException(sprintf(
+                'Для удаленной онлайн-записи %d найдено несколько CRM-сделок: %d',
+                $bookingId,
+                count($matches),
+            ));
+        }
+
+        $deal = $matches[0];
+
+        return new DealBookingState(
+            dealId: $this->positiveInt($deal['ID'] ?? null, 'CRM-сделка не найдена'),
+            responsibleUserId: $this->positiveInt(
+                $deal['ASSIGNED_BY_ID'] ?? null,
+                'В CRM-сделке не указан ответственный',
+            ),
+            currentBookingId: $this->nullablePositiveInt($deal[$this->config->currentBookingField] ?? null),
+            masterTaskId: $this->nullablePositiveInt($deal[$this->config->masterTaskField] ?? null),
+            bookingSignature: $this->nullableString($deal[$this->config->bookingSignatureField] ?? null),
+            serviceStationReference: $this->nullableString($deal[$this->config->dealServiceStationField] ?? null),
+            controlTaskId: $this->nullablePositiveInt($deal[$this->config->controlTaskField] ?? null),
+        );
+    }
+
     public function findResourceAssignment(int $resourceId): ResourceAssignment
     {
         $metadata = $this->getResourceListMetadata();
@@ -373,6 +419,69 @@ final class Bitrix24BookingAutomationGateway implements BookingAutomationGateway
     public function addControlTaskComment(int $taskId, string $message): void
     {
         $this->addMasterTaskComment($taskId, $message);
+    }
+
+    public function completeTaskWithComment(int $taskId, string $message): void
+    {
+        $this->addMasterTaskComment($taskId, $message);
+        $this->call('tasks.task.complete', ['taskId' => $taskId]);
+    }
+
+    public function cancelBookingWorkflows(int $dealId): void
+    {
+        $this->terminateDealWorkflows(
+            $dealId,
+            $this->config->workflowTemplateId,
+            'Онлайн-запись удалена, процесс дефектовки остановлен.',
+        );
+        $this->terminateDealWorkflows(
+            $dealId,
+            $this->config->masterReminderWorkflowTemplateId,
+            'Онлайн-запись удалена, напоминание отменено.',
+        );
+        $this->terminateDealWorkflows(
+            $dealId,
+            $this->config->clientReminderWorkflowTemplateId,
+            'Онлайн-запись удалена, напоминание отменено.',
+        );
+    }
+
+    public function resetDealAfterBookingDeletion(int $dealId): void
+    {
+        $deal = $this->call('crm.deal.get', ['id' => $dealId]);
+        $categoryId = (int) ($deal['CATEGORY_ID'] ?? 0);
+        $stageEntityId = $categoryId > 0 ? 'DEAL_STAGE_' . $categoryId : 'DEAL_STAGE';
+        $stages = $this->call('crm.status.list', [
+            'filter' => ['ENTITY_ID' => $stageEntityId],
+        ]);
+        $stageIds = [];
+        foreach ($stages as $stage) {
+            if (!is_array($stage)
+                || trim((string) ($stage['NAME'] ?? '')) !== $this->config->bookingSelectionStageName) {
+                continue;
+            }
+            $stageId = trim((string) ($stage['STATUS_ID'] ?? ''));
+            if ($stageId !== '') {
+                $stageIds[] = $stageId;
+            }
+        }
+        $stageIds = array_values(array_unique($stageIds));
+        if (count($stageIds) !== 1) {
+            throw new BookingDataException(sprintf(
+                'В воронке сделки %d ожидалась одна стадия "%s", получено: %d',
+                $dealId,
+                $this->config->bookingSelectionStageName,
+                count($stageIds),
+            ));
+        }
+
+        $this->updateDeal($dealId, [
+            $this->config->currentBookingField => '',
+            $this->config->masterTaskField => '',
+            $this->config->controlTaskField => '',
+            $this->config->bookingSignatureField => '',
+            'STAGE_ID' => $stageIds[0],
+        ]);
     }
 
     public function updateDealServiceStation(int $dealId, string $reference): void
@@ -657,7 +766,11 @@ final class Bitrix24BookingAutomationGateway implements BookingAutomationGateway
         ]);
     }
 
-    private function terminateDealWorkflows(int $dealId, int $templateId): void
+    private function terminateDealWorkflows(
+        int $dealId,
+        int $templateId,
+        string $status = 'Онлайн-запись изменена, ожидание устарело.',
+    ): void
     {
         $instances = $this->call('bizproc.workflow.instances', [
             'SELECT' => ['ID'],
@@ -674,7 +787,7 @@ final class Bitrix24BookingAutomationGateway implements BookingAutomationGateway
             if ($id !== '') {
                 $this->call('bizproc.workflow.terminate', [
                     'ID' => $id,
-                    'STATUS' => 'Онлайн-запись изменена, ожидание устарело.',
+                    'STATUS' => $status,
                 ]);
             }
         }

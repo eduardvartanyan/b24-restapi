@@ -37,8 +37,13 @@ final class FakeBookingAutomationGateway implements BookingAutomationGateway
     public array $maxMessages = [];
     public array $masterReminders = [];
     public array $clientReminders = [];
+    public array $completedTasks = [];
+    public array $cancelledReminderDeals = [];
+    public array $clearedBookingStates = [];
+    public array $deleteActions = [];
     public bool $failWorkflow = false;
     public bool $failCascade = false;
+    public ?int $failTaskCompletion = null;
     public MasterTask $task;
     public ControlTask $controlTask;
     public ServiceStation $station;
@@ -74,6 +79,11 @@ final class FakeBookingAutomationGateway implements BookingAutomationGateway
     public function getDealBookingState(int $dealId): DealBookingState
     {
         return $this->deal;
+    }
+
+    public function findDealBookingStateByCurrentBookingId(int $bookingId): ?DealBookingState
+    {
+        return $this->deal->currentBookingId === $bookingId ? $this->deal : null;
     }
 
     public function findResourceAssignment(int $resourceId): ResourceAssignment
@@ -177,6 +187,38 @@ final class FakeBookingAutomationGateway implements BookingAutomationGateway
     public function addControlTaskComment(int $taskId, string $message): void
     {
         $this->controlTaskComments[] = [$taskId, $message];
+    }
+
+    public function completeTaskWithComment(int $taskId, string $message): void
+    {
+        if ($this->failTaskCompletion === $taskId) {
+            throw new RuntimeException('Task completion failed');
+        }
+        $this->taskComments[] = [$taskId, $message];
+        $this->completedTasks[] = $taskId;
+        $this->deleteActions[] = 'complete:' . $taskId;
+    }
+
+    public function cancelBookingWorkflows(int $dealId): void
+    {
+        $this->cancelledReminderDeals[] = $dealId;
+        $this->deleteActions[] = 'cancel-workflows';
+    }
+
+    public function resetDealAfterBookingDeletion(int $dealId): void
+    {
+        $this->clearedBookingStates[] = $dealId;
+        $this->deleteActions[] = 'clear-state';
+        $this->deal = new DealBookingState(
+            $this->deal->dealId,
+            $this->deal->responsibleUserId,
+            null,
+            null,
+            $this->deal->contactId,
+            null,
+            $this->deal->serviceStationReference,
+            null,
+        );
     }
 
     public function updateDealServiceStation(int $dealId, string $reference): void
@@ -471,6 +513,110 @@ $tests['keeps update idempotent when cascade notification fails'] = static funct
         true,
         str_contains($gateway->reports[0][1], 'MAX failed'),
         'Notification failure details were not reported',
+    );
+};
+
+$tests['clears automation state and completes tasks when current booking is deleted'] = static function (): void {
+    $gateway = new FakeBookingAutomationGateway();
+    $gateway->deal = new DealBookingState(
+        99,
+        10,
+        8,
+        335626,
+        77,
+        '4|2030-08-10T11:00:00+08:00|2030-08-10T12:00:00+08:00',
+        'CO_123',
+        335627,
+    );
+    $handler = new BookingEventHandler($gateway, new BookingAutomationConfig());
+
+    $handler->handle(payload(8, 'ONBOOKINGDELETE'));
+    $handler->handle(payload(8, 'ONBOOKINGDELETE'));
+
+    assertSameValue([335626, 335627], $gateway->completedTasks, 'Related tasks were not completed exactly once');
+    assertSameValue(1, count($gateway->maxMessages), 'Master cancellation was not sent to MAX exactly once');
+    assertSameValue(1, count($gateway->cascadeMessages), 'Client cancellation was not sent exactly once');
+    assertSameValue(77, $gateway->cascadeMessages[0][0], 'Client cascade was not started for the contact');
+    assertSameValue(
+        true,
+        str_contains($gateway->maxMessages[0][1], '10.08.2030 11:00'),
+        'Master cancellation does not contain the deleted booking date',
+    );
+    assertSameValue(
+        true,
+        str_contains($gateway->cascadeMessages[0][2], 'BMW X5'),
+        'Client cancellation does not contain vehicle data',
+    );
+    assertSameValue([99], $gateway->cancelledReminderDeals, 'Booking reminders were not cancelled');
+    assertSameValue([99], $gateway->clearedBookingStates, 'Deal was not reset after booking deletion');
+    assertSameValue(
+        ['cancel-workflows', 'complete:335626', 'complete:335627', 'clear-state'],
+        $gateway->deleteActions,
+        'Booking workflow was not stopped before tasks were completed and the deal was reset',
+    );
+    assertSameValue(1, count($gateway->reports), 'Responsible user was not notified exactly once');
+    assertSameValue(null, $gateway->deal->currentBookingId, 'Current booking ID was not cleared');
+    assertSameValue(null, $gateway->deal->masterTaskId, 'Master task ID was not cleared');
+    assertSameValue(null, $gateway->deal->controlTaskId, 'Control task ID was not cleared');
+    assertSameValue(null, $gateway->deal->bookingSignature, 'Booking signature was not cleared');
+};
+
+$tests['ignores delete event for non-current booking'] = static function (): void {
+    $gateway = new FakeBookingAutomationGateway();
+    $gateway->deal = new DealBookingState(99, 10, 7, 335626, 77, null, 'CO_123', 335627);
+    $handler = new BookingEventHandler($gateway, new BookingAutomationConfig());
+
+    $handler->handle(payload(8, 'ONBOOKINGDELETE'));
+
+    assertSameValue([], $gateway->completedTasks, 'Non-current delete completed tasks');
+    assertSameValue([], $gateway->clearedBookingStates, 'Non-current delete cleared deal state');
+    assertSameValue([], $gateway->reports, 'Non-current delete notified responsible user');
+};
+
+$tests['clears delete state and reports task completion failure'] = static function (): void {
+    $gateway = new FakeBookingAutomationGateway();
+    $gateway->deal = new DealBookingState(99, 10, 8, 335626, 77, null, 'CO_123', 335627);
+    $gateway->failTaskCompletion = 335626;
+    $handler = new BookingEventHandler($gateway, new BookingAutomationConfig());
+
+    $handler->handle(payload(8, 'ONBOOKINGDELETE'));
+
+    assertSameValue([335627], $gateway->completedTasks, 'Other task was not completed after a partial failure');
+    assertSameValue([99], $gateway->clearedBookingStates, 'State was not cleared after a task failure');
+    assertSameValue(1, count($gateway->reports), 'Task failure was not reported');
+    assertSameValue(
+        true,
+        str_contains($gateway->reports[0][1], 'Task completion failed'),
+        'Task failure details were not included in the report',
+    );
+};
+
+$tests['clears delete state when external cancellation notifications fail'] = static function (): void {
+    $gateway = new FakeBookingAutomationGateway();
+    $old = booking(8);
+    $gateway->deal = new DealBookingState(
+        99,
+        10,
+        8,
+        335626,
+        77,
+        (string) $old->signature(),
+        'CO_123',
+        335627,
+    );
+    $gateway->failCascade = true;
+    $handler = new BookingEventHandler($gateway, new BookingAutomationConfig());
+
+    $handler->handle(payload(8, 'ONBOOKINGDELETE'));
+
+    assertSameValue([335626, 335627], $gateway->completedTasks, 'Notification failure blocked task completion');
+    assertSameValue([99], $gateway->clearedBookingStates, 'Notification failure blocked deal reset');
+    assertSameValue(1, count($gateway->reports), 'Notification failures were not reported');
+    assertSameValue(
+        true,
+        str_contains($gateway->reports[0][1], 'MAX failed')
+            && str_contains($gateway->reports[0][1], 'Cascade failed'),
+        'External notification failure details were not reported',
     );
 };
 
