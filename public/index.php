@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 use App\Helpers\Logger;
 use App\Http\Controllers\BookingEventController;
+use App\Http\Controllers\BookingResourceController;
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\MaxController;
 use App\Http\Controllers\ReviewController;
@@ -49,12 +50,23 @@ try {
     /** @var Container $container */
 
     switch ($uri) {
+        case '/robots.txt':
+            header('Content-Type: text/plain; charset=utf-8');
+            header('X-Content-Type-Options: nosniff');
+            readfile(__DIR__ . '/robots.txt');
+            break;
+
         case '/api/b24/booking/events':
             if ($method === 'POST') {
                 Middleware::check();
             }
             $bookingEventController = $container->get(BookingEventController::class);
             $bookingEventController->handle();
+            break;
+
+        case '/api/b24/booking/resources':
+            $bookingResourceController = $container->get(BookingResourceController::class);
+            $bookingResourceController->handle();
             break;
 
         case '/api/b24/contacts/import-birthdate':

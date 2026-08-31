@@ -1,0 +1,2 @@
+User-agent: *
+Disallow: /api/b24/booking/resources
