@@ -28,7 +28,8 @@ readonly class MaxService
         private ChatRequestRepository $chatRequestRepository,
         private ChatSourceRepository $chatSourceRepository,
         private DaDataService $daData,
-        private MessageCatalog $messages
+        private MessageCatalog $messages,
+        private string $noticeBotToken
     ) { }
 
     public function handle(string $raw): array
@@ -958,6 +959,48 @@ readonly class MaxService
             ]);
 
             return ['status' => 500, 'body' => 'Internal error'];
+        }
+    }
+
+    public function handleNotice(string $raw): array
+    {
+        $update = json_decode($raw, true);
+        if (!is_array($update)) {
+            Logger::error('Max notice webhook: invalid JSON', [
+                'json_error' => json_last_error_msg(),
+            ]);
+            return ['status' => 400, 'body' => 'Invalid update'];
+        }
+
+        if (($update['update_type'] ?? null) !== 'bot_started') {
+            return ['status' => 200, 'body' => 'OK'];
+        }
+
+        $userId = $update['user']['user_id'] ?? $update['user_id'] ?? null;
+        if ((!is_int($userId) && !is_string($userId)) || !ctype_digit((string)$userId) || (int)$userId <= 0) {
+            Logger::error('Max notice webhook: invalid userId');
+            return ['status' => 400, 'body' => 'Invalid userId'];
+        }
+
+        return $this->sendNoticeMessage("Ваш userId: {$userId}", userId: $userId);
+    }
+
+    public function sendNoticeMessage(string $message, int|string|null $chatId = null, int|string|null $userId = null): array
+    {
+        if (trim($this->noticeBotToken) === '') {
+            Logger::error('Max notice bot: MAX_BOT_TOKEN_NOTICE is not configured');
+
+            return ['status' => 500, 'body' => 'Notice bot is not configured'];
+        }
+
+        // The SDK stores the token globally, including for separate bot instances.
+        $previousToken = PHPMaxBot::$token;
+        PHPMaxBot::$token = $this->noticeBotToken;
+
+        try {
+            return $this->sendMessage($message, $chatId, $userId);
+        } finally {
+            PHPMaxBot::$token = $previousToken;
         }
     }
 

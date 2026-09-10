@@ -27,6 +27,19 @@ readonly class MaxController
         echo $result['body'];
     }
 
+    public function handleNotice(): void
+    {
+        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+            http_response_code(405);
+            echo 'Method Not Allowed';
+            return;
+        }
+
+        $result = $this->maxService->handleNotice(file_get_contents('php://input') ?: '');
+        http_response_code($result['status']);
+        echo $result['body'];
+    }
+
     public function handleWebhook(): void
     {
         $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
@@ -95,7 +108,7 @@ readonly class MaxController
             'user_id' => $userId,
         ]);
 
-        $result = $this->maxService->sendMessage(
+        $result = $this->maxService->sendNoticeMessage(
             message: (string)$message,
             chatId: $chatId,
             userId: $userId
