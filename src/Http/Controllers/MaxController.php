@@ -108,7 +108,7 @@ readonly class MaxController
             'user_id' => $userId,
         ]);
 
-        $result = $this->maxService->sendNoticeMessage(
+        $result = $this->maxService->sendMessage(
             message: (string)$message,
             chatId: $chatId,
             userId: $userId
