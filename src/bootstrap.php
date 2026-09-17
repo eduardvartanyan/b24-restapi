@@ -83,7 +83,7 @@ $container->set(MaxService::class,              fn() => new MaxService(
     $container->get(ChatSourceRepository::class),
     $container->get(DaDataService::class),
     new MessageCatalog(__DIR__ . '/Support/Messages/chatbot.php'),
-    $_ENV['MAX_BOT_TOKEN_NOTICE'] ?? ''
+    $_ENV['MAX_BOT_TOKEN'] ?? ''
 ));
 $container->set(PHPMaxBot::class,               fn() => new PHPMaxBot($_ENV['MAX_BOT_TOKEN']));
 $container->set(ChatStateRepository::class,     fn() => new ChatStateRepository());
