@@ -28,8 +28,7 @@ readonly class MaxService
         private ChatRequestRepository $chatRequestRepository,
         private ChatSourceRepository $chatSourceRepository,
         private DaDataService $daData,
-        private MessageCatalog $messages,
-        private string $noticeBotToken
+        private MessageCatalog $messages
     ) { }
 
     public function handle(string $raw): array

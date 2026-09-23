@@ -81,7 +81,15 @@ try {
             if ($method === 'POST') {
                 Middleware::check();
             }
-            $maxController = $container->get(MaxController::class);
+            $maxController = $container->get('max.controller.client');
+            $maxController->handleB24MessageWebhook();
+            break;
+
+        case '/api/b24/max/send-notice':
+            if ($method === 'POST') {
+                Middleware::check();
+            }
+            $maxController = $container->get('max.controller.notice');
             $maxController->handleB24MessageWebhook();
             break;
 
@@ -117,19 +125,19 @@ try {
             break;
 
         case '/api/max/notice':
-            $maxController = $container->get(MaxController::class);
+            $maxController = $container->get('max.controller.notice');
             $maxController->handleNotice();
             break;
 
         // https://max.ru/id381250859808_bot?start=96147618
         case '/api/max':
-            $maxController = $container->get(MaxController::class);
+            $maxController = $container->get('max.controller.client');
             $maxController->handle();
             break;
 
         // https://review.avarcomf.ru/api/max/webhook?m=mark_in_work&d=181788&c=%D0%94%D0%B5%D0%BD%D0%B8%D1%81%D1%8E%D0%BA%20%D0%95%D0%B3%D0%BE%D1%80%20%D0%A0%D0%BE%D0%BC%D0%B0%D0%BD%D0%BE%D0%B2%D0%B8%D1%87&p=+79148764102
         case '/api/max/webhook':
-            $maxController = $container->get(MaxController::class);
+            $maxController = $container->get('max.controller.client');
             $maxController->handleWebhook();
             break;
 

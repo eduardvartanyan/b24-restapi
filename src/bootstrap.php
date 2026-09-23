@@ -73,19 +73,29 @@ $container->set(ReviewController::class,        fn() => new ReviewController(
 ));
 $container->set(TgService::class,               fn() => new TgService());
 $container->set(TgController::class,            fn() => new TgController($container->get(TgService::class)));
-$container->set(MaxController::class,           fn() => new MaxController($container->get(MaxService::class)));
+$container->set('max.controller.client',        fn() => new MaxController($container->get('max.service.client')));
+$container->set('max.controller.notice',        fn() => new MaxController($container->get('max.service.notice')));
 $container->set(ClickRepository::class,         fn() => new ClickRepository());
-$container->set(MaxService::class,              fn() => new MaxService(
+$container->set('max.service.client',           fn() => new MaxService(
     $container->get(B24Service::class),
-    $container->get(PHPMaxBot::class),
+    $container->get('max.bot.client'),
     $container->get(ChatStateRepository::class),
     $container->get(ChatRequestRepository::class),
     $container->get(ChatSourceRepository::class),
     $container->get(DaDataService::class),
-    new MessageCatalog(__DIR__ . '/Support/Messages/chatbot.php'),
-    $_ENV['MAX_BOT_TOKEN_NOTICE'] ?? ''
+    new MessageCatalog(__DIR__ . '/Support/Messages/chatbot.php')
 ));
-$container->set(PHPMaxBot::class,               fn() => new PHPMaxBot($_ENV['MAX_BOT_TOKEN']));
+$container->set('max.service.notice',           fn() => new MaxService(
+    $container->get(B24Service::class),
+    $container->get('max.bot.notice'),
+    $container->get(ChatStateRepository::class),
+    $container->get(ChatRequestRepository::class),
+    $container->get(ChatSourceRepository::class),
+    $container->get(DaDataService::class),
+    new MessageCatalog(__DIR__ . '/Support/Messages/chatbot.php')
+));
+$container->set('max.bot.client',               fn() => new PHPMaxBot($_ENV['MAX_BOT_TOKEN']));
+$container->set('max.bot.notice',               fn() => new PHPMaxBot($_ENV['MAX_BOT_TOKEN_NOTICE']));
 $container->set(ChatStateRepository::class,     fn() => new ChatStateRepository());
 $container->set(ChatRequestRepository::class,   fn() => new ChatRequestRepository());
 $container->set(ChatSourceRepository::class,    fn() => new ChatSourceRepository());
