@@ -98,7 +98,16 @@ readonly class MaxService
         $this->maxBot->on('bot_started', function () {
             $update = PHPMaxBot::$currentUpdate;
             $chatId = $update['chat_id'];
-            $userId = $update['user_id'];
+            $userId = (int) ($update['user']['user_id'] ?? $update['user_id'] ?? 0);
+
+            if ($userId <= 0) {
+                Logger::error('Max webhook: invalid user ID in bot_started', [
+                    'chat_id' => $chatId,
+                    'user_id' => $update['user']['user_id'] ?? $update['user_id'] ?? null,
+                ]);
+
+                return null;
+            }
 
             if (!$this->chatSourceRepository->exists($chatId)) {
                 if ($update['payload'] === 'qr') {
@@ -118,6 +127,7 @@ readonly class MaxService
 
             Logger::info('[MaxService->registerHandlers] bot_started', [
                 'chat_id'    => $chatId,
+                'user_id'    => $userId,
                 'payload'    => $update['payload'] ,
                 'contact_id' => $contactId ?? null,
             ]);
