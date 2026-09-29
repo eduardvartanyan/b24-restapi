@@ -49,13 +49,6 @@ readonly class MaxService
             $this->registerHandlers();
             $this->registerActions();
 
-            Bot::setMyCommands([
-                [
-                    'name' => 'menu',
-                    'description' => 'Открыть команды'
-                ],
-            ]);
-
             $this->maxBot->command('menu', function() {
                 return Bot::sendMessage($this->messages->get('message__menu'), [
                     'attachments' => [$this->getMenu()]
