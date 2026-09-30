@@ -20,6 +20,8 @@ readonly class MaxService
     private const int SOURCE_SMS = 2526;
     private const int SOURCE_QR = 2528;
     private const int SOURCE_ORGANIC = 2530;
+    private const int ERROR_NOTIFICATION_CHAT_ID = 206113970;
+    private const int ERROR_NOTIFICATION_USER_ID = 14199860;
 
     public function __construct(
         private B24Service $b24,
@@ -28,7 +30,8 @@ readonly class MaxService
         private ChatRequestRepository $chatRequestRepository,
         private ChatSourceRepository $chatSourceRepository,
         private DaDataService $daData,
-        private MessageCatalog $messages
+        private MessageCatalog $messages,
+        private string $noticeBotToken
     ) { }
 
     public function handle(string $raw): array
@@ -67,6 +70,7 @@ readonly class MaxService
                 'message' => $e->getMessage(),
                 'code'    => method_exists($e, 'getApiErrorCode') ? $e->getApiErrorCode() : null,
             ]);
+            $this->notifyFatalError('MAX API', $e, $update);
 
             return ['status' => 500, 'body' => 'MAX API error'];
         } catch (MaxBotException $e) {
@@ -74,6 +78,7 @@ readonly class MaxService
                 'message' => $e->getMessage(),
                 'context' => method_exists($e, 'getContext') ? $e->getContext() : null,
             ]);
+            $this->notifyFatalError('MAX library', $e, $update);
 
             return ['status' => 500, 'body' => 'Bot error'];
         } catch (Throwable $e) {
@@ -81,6 +86,7 @@ readonly class MaxService
                 'message' => $e->getMessage(),
                 'trace'   => $e->getTraceAsString(),
             ]);
+            $this->notifyFatalError('Unexpected', $e, $update);
 
             return ['status' => 500, 'body' => 'Internal error'];
         }
@@ -925,8 +931,14 @@ readonly class MaxService
 
     public function markDtpRequestInWork(int|string $dealId, string $commissarName, string $commissarPhone): array
     {
+        $notificationContext = [
+            'update_type' => 'mark_dtp_request_in_work',
+            'deal_id' => $dealId,
+        ];
+
         try {
             $dtpRequest = $this->chatRequestRepository->getByDealIdAndType($dealId, 'dtp');
+            $notificationContext['chat_id'] = $dtpRequest['chat_id'] ?? null;
             $payload = $dtpRequest['payload'];
             $payload['commissar'] = $commissarName;
             $this->chatRequestRepository->markInWork($dtpRequest['id']);
@@ -945,6 +957,7 @@ readonly class MaxService
                 'message' => $e->getMessage(),
                 'code'    => method_exists($e, 'getApiErrorCode') ? $e->getApiErrorCode() : null,
             ]);
+            $this->notifyFatalError('MAX API', $e, $notificationContext);
 
             return ['status' => 500, 'body' => 'MAX API error'];
         } catch (MaxBotException $e) {
@@ -952,6 +965,7 @@ readonly class MaxService
                 'message' => $e->getMessage(),
                 'context' => method_exists($e, 'getContext') ? $e->getContext() : null,
             ]);
+            $this->notifyFatalError('MAX library', $e, $notificationContext);
 
             return ['status' => 500, 'body' => 'Bot error'];
         } catch (Throwable $e) {
@@ -959,6 +973,7 @@ readonly class MaxService
                 'message' => $e->getMessage(),
                 'trace'   => $e->getTraceAsString(),
             ]);
+            $this->notifyFatalError('Unexpected', $e, $notificationContext);
 
             return ['status' => 500, 'body' => 'Internal error'];
         }
@@ -1000,13 +1015,78 @@ readonly class MaxService
         PHPMaxBot::$token = $this->noticeBotToken;
 
         try {
-            return $this->sendMessage($message, $chatId, $userId);
+            return $this->sendMessage($message, $chatId, $userId, notifyOnFailure: false);
         } finally {
             PHPMaxBot::$token = $previousToken;
         }
     }
 
-    public function sendMessage(string $message, int|string|null $chatId = null, int|string|null $userId = null): array
+    private function notifyFatalError(string $type, Throwable $error, array $update): array
+    {
+        $chatId = $update['chat_id']
+            ?? $update['message']['recipient']['chat_id']
+            ?? null;
+        $userId = $update['user']['user_id']
+            ?? $update['message']['sender']['user_id']
+            ?? $update['user_id']
+            ?? null;
+        $apiCode = method_exists($error, 'getApiErrorCode')
+            ? $error->getApiErrorCode()
+            : null;
+
+        $lines = [
+            '🚨 Фатальная ошибка MAX-бота',
+            'Тип: ' . $type,
+            'Исключение: ' . $error::class,
+            'Сообщение: ' . $error->getMessage(),
+            'Событие: ' . ($update['update_type'] ?? 'unknown'),
+            'chat_id: ' . ($chatId ?? 'unknown'),
+            'user_id: ' . ($userId ?? 'unknown'),
+            'Файл: ' . $error->getFile(),
+            'Строка: ' . $error->getLine(),
+            'Время: ' . date('Y-m-d H:i:s T'),
+        ];
+
+        if (isset($update['deal_id'])) {
+            $lines[] = 'deal_id: ' . $update['deal_id'];
+        }
+
+        if ($apiCode !== null && $apiCode !== '') {
+            $lines[] = 'Код API: ' . $apiCode;
+        }
+
+        $message = substr(implode(PHP_EOL, $lines), 0, 3500);
+
+        try {
+            $result = $this->sendNoticeMessage(
+                $message,
+                chatId: self::ERROR_NOTIFICATION_CHAT_ID
+            );
+
+            if (($result['status'] ?? 500) >= 400) {
+                $result = $this->sendNoticeMessage(
+                    $message,
+                    userId: self::ERROR_NOTIFICATION_USER_ID
+                );
+            }
+
+            return $result;
+        } catch (Throwable $notificationError) {
+            Logger::error('Max webhook: failed to send fatal error notification', [
+                'message' => $notificationError->getMessage(),
+                'original_error' => $error->getMessage(),
+            ]);
+
+            return ['status' => 500, 'body' => 'Fatal error notification failed'];
+        }
+    }
+
+    public function sendMessage(
+        string $message,
+        int|string|null $chatId = null,
+        int|string|null $userId = null,
+        bool $notifyOnFailure = true
+    ): array
     {
         try {
             if ($chatId !== null && trim((string)$chatId) !== '') {
@@ -1037,6 +1117,13 @@ readonly class MaxService
                 'message' => $e->getMessage(),
                 'code'    => method_exists($e, 'getApiErrorCode') ? $e->getApiErrorCode() : null,
             ]);
+            if ($notifyOnFailure) {
+                $this->notifyFatalError('MAX API', $e, [
+                    'update_type' => 'send_message',
+                    'chat_id' => $chatId,
+                    'user_id' => $userId,
+                ]);
+            }
 
             return ['status' => 500, 'body' => 'MAX API error'];
         } catch (MaxBotException $e) {
@@ -1046,6 +1133,13 @@ readonly class MaxService
                 'message' => $e->getMessage(),
                 'context' => method_exists($e, 'getContext') ? $e->getContext() : null,
             ]);
+            if ($notifyOnFailure) {
+                $this->notifyFatalError('MAX library', $e, [
+                    'update_type' => 'send_message',
+                    'chat_id' => $chatId,
+                    'user_id' => $userId,
+                ]);
+            }
 
             return ['status' => 500, 'body' => 'Bot error'];
         } catch (Throwable $e) {
@@ -1055,6 +1149,13 @@ readonly class MaxService
                 'message' => $e->getMessage(),
                 'trace'   => $e->getTraceAsString(),
             ]);
+            if ($notifyOnFailure) {
+                $this->notifyFatalError('Unexpected', $e, [
+                    'update_type' => 'send_message',
+                    'chat_id' => $chatId,
+                    'user_id' => $userId,
+                ]);
+            }
 
             return ['status' => 500, 'body' => 'Internal error'];
         }
