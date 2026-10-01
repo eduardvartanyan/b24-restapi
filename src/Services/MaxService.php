@@ -20,7 +20,6 @@ readonly class MaxService
     private const int SOURCE_SMS = 2526;
     private const int SOURCE_QR = 2528;
     private const int SOURCE_ORGANIC = 2530;
-    private const int ERROR_NOTIFICATION_CHAT_ID = 206113970;
     private const int ERROR_NOTIFICATION_USER_ID = 14199860;
 
     public function __construct(
@@ -1058,19 +1057,10 @@ readonly class MaxService
         $message = substr(implode(PHP_EOL, $lines), 0, 3500);
 
         try {
-            $result = $this->sendNoticeMessage(
+            return $this->sendNoticeMessage(
                 $message,
-                chatId: self::ERROR_NOTIFICATION_CHAT_ID
+                userId: self::ERROR_NOTIFICATION_USER_ID
             );
-
-            if (($result['status'] ?? 500) >= 400) {
-                $result = $this->sendNoticeMessage(
-                    $message,
-                    userId: self::ERROR_NOTIFICATION_USER_ID
-                );
-            }
-
-            return $result;
         } catch (Throwable $notificationError) {
             Logger::error('Max webhook: failed to send fatal error notification', [
                 'message' => $notificationError->getMessage(),
