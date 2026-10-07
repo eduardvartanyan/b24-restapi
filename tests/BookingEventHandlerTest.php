@@ -44,6 +44,8 @@ final class FakeBookingAutomationGateway implements BookingAutomationGateway
     public bool $failWorkflow = false;
     public bool $failCascade = false;
     public ?int $failTaskCompletion = null;
+    /** @var int[] */
+    public array $mastersWithoutMaxId = [];
     public MasterTask $task;
     public ControlTask $controlTask;
     public ServiceStation $station;
@@ -148,8 +150,12 @@ final class FakeBookingAutomationGateway implements BookingAutomationGateway
         return $this->station;
     }
 
-    public function getMasterRecipient(int $userId): MaxRecipient
+    public function getMasterRecipient(int $userId): ?MaxRecipient
     {
+        if (in_array($userId, $this->mastersWithoutMaxId, true)) {
+            return null;
+        }
+
         return new MaxRecipient(100000 + $userId, 'Master');
     }
 
@@ -404,6 +410,30 @@ $tests['updates existing task when booking period changes'] = static function ()
     assertSameValue([[99, (string) $gateway->bookings[8]->signature()]], $gateway->signatureUpdates, 'Signature was not stored');
 };
 
+$tests['updates booking without master Max ID'] = static function (): void {
+    $gateway = new FakeBookingAutomationGateway();
+    $gateway->bookings[8] = booking(8, '2030-08-10 13:00:00');
+    $old = booking(8);
+    $gateway->deal = new DealBookingState(99, 10, 8, 335626, 77, (string) $old->signature(), 'CO_123', 335627);
+    $gateway->mastersWithoutMaxId = [588];
+    $handler = new BookingEventHandler($gateway, new BookingAutomationConfig());
+
+    $handler->handle(payload(8, 'ONBOOKINGUPDATE'));
+
+    assertSameValue(1, count($gateway->taskUpdates), 'Missing Max ID blocked master task update');
+    assertSameValue(1, count($gateway->controlTaskUpdates), 'Missing Max ID blocked control task update');
+    assertSameValue(1, count($gateway->cascadeMessages), 'Missing Max ID blocked client notification');
+    assertSameValue([], $gateway->maxMessages, 'MAX notification was attempted without Max ID');
+    assertSameValue([], $gateway->masterReminders, 'MAX reminder was scheduled without Max ID');
+    assertSameValue(1, count($gateway->clientReminders), 'Missing Max ID blocked client reminder');
+    assertSameValue(1, count($gateway->reports), 'Missing Max ID was not reported as a non-critical issue');
+    assertSameValue(
+        true,
+        str_contains($gateway->reports[0][1], 'Max ID не указан'),
+        'Missing Max ID report does not explain the skipped MAX actions',
+    );
+};
+
 $tests['does not notify client when only booking end changes'] = static function (): void {
     $gateway = new FakeBookingAutomationGateway();
     $old = booking(8);
@@ -559,6 +589,36 @@ $tests['clears automation state and completes tasks when current booking is dele
     assertSameValue(null, $gateway->deal->masterTaskId, 'Master task ID was not cleared');
     assertSameValue(null, $gateway->deal->controlTaskId, 'Control task ID was not cleared');
     assertSameValue(null, $gateway->deal->bookingSignature, 'Booking signature was not cleared');
+};
+
+$tests['clears booking after deletion without master Max ID'] = static function (): void {
+    $gateway = new FakeBookingAutomationGateway();
+    $old = booking(8);
+    $gateway->deal = new DealBookingState(
+        99,
+        10,
+        8,
+        335626,
+        77,
+        (string) $old->signature(),
+        'CO_123',
+        335627,
+    );
+    $gateway->mastersWithoutMaxId = [588];
+    $handler = new BookingEventHandler($gateway, new BookingAutomationConfig());
+
+    $handler->handle(payload(8, 'ONBOOKINGDELETE'));
+
+    assertSameValue([335626, 335627], $gateway->completedTasks, 'Missing Max ID blocked task completion');
+    assertSameValue([99], $gateway->clearedBookingStates, 'Missing Max ID blocked deal reset');
+    assertSameValue([], $gateway->maxMessages, 'MAX cancellation was attempted without Max ID');
+    assertSameValue(1, count($gateway->cascadeMessages), 'Missing Max ID blocked client cancellation');
+    assertSameValue(1, count($gateway->reports), 'Deletion result was not reported');
+    assertSameValue(
+        true,
+        str_contains($gateway->reports[0][1], 'Max ID не указан'),
+        'Deletion report does not explain the skipped MAX notification',
+    );
 };
 
 $tests['ignores delete event for non-current booking'] = static function (): void {

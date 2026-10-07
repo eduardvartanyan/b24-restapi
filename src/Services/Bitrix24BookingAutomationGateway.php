@@ -15,6 +15,7 @@ use App\Booking\NotificationRecipient;
 use App\Booking\ResourceAssignment;
 use App\Booking\ServiceStation;
 use App\Contracts\BookingAutomationGateway;
+use App\Contracts\MaxMessageSender;
 use Bitrix24\SDK\Core\Exceptions\BaseException;
 use Bitrix24\SDK\Core\Exceptions\ItemNotFoundException;
 use Bitrix24\SDK\Services\ServiceBuilder;
@@ -30,7 +31,7 @@ final class Bitrix24BookingAutomationGateway implements BookingAutomationGateway
     public function __construct(
         private readonly ServiceBuilder $b24,
         private readonly BookingAutomationConfig $config,
-        private readonly MaxService $maxService,
+        private readonly MaxMessageSender $maxMessageSender,
     ) {
     }
 
@@ -248,11 +249,6 @@ final class Bitrix24BookingAutomationGateway implements BookingAutomationGateway
         if ($userType !== '' && $userType !== 'extranet') {
             throw new BookingDataException(sprintf('Пользователь %d не является экстранет-пользователем', $userId));
         }
-
-        $this->positiveInt(
-            $user[$this->config->masterMaxIdField] ?? null,
-            sprintf('У экстранет-пользователя %d не указан корректный Max ID', $userId),
-        );
     }
 
     public function setCurrentBookingId(int $dealId, ?int $bookingId): void
@@ -329,15 +325,24 @@ final class Bitrix24BookingAutomationGateway implements BookingAutomationGateway
         );
     }
 
-    public function getMasterRecipient(int $userId): MaxRecipient
+    public function getMasterRecipient(int $userId): ?MaxRecipient
     {
         $user = $this->getUser($userId);
+        $maxId = filter_var(
+            $user[$this->config->masterMaxIdField] ?? null,
+            FILTER_VALIDATE_INT,
+            ['options' => ['min_range' => 1]],
+        );
+        if ($maxId === false) {
+            Logger::info('B24 master MAX notification skipped because Max ID is missing', [
+                'user_id' => $userId,
+                'field' => $this->config->masterMaxIdField,
+            ]);
+            return null;
+        }
 
         return new MaxRecipient(
-            userId: $this->positiveInt(
-                $user[$this->config->masterMaxIdField] ?? null,
-                sprintf('У экстранет-пользователя %d не указан корректный Max ID', $userId),
-            ),
+            userId: (int) $maxId,
             name: trim(implode(' ', array_filter([
                 (string) ($user['NAME'] ?? ''),
                 (string) ($user['LAST_NAME'] ?? ''),
@@ -519,14 +524,7 @@ final class Bitrix24BookingAutomationGateway implements BookingAutomationGateway
 
     public function sendMaxMessage(MaxRecipient $recipient, string $message): void
     {
-        $result = $this->maxService->sendMessage(message: $message, userId: $recipient->userId);
-        if (($result['status'] ?? 500) < 200 || ($result['status'] ?? 500) >= 300) {
-            throw new \RuntimeException(sprintf(
-                'Не удалось отправить сообщение пользователю MAX %d: %s',
-                $recipient->userId,
-                (string) ($result['body'] ?? 'неизвестная ошибка'),
-            ));
-        }
+        $this->maxMessageSender->sendToUser($recipient->userId, $message);
     }
 
     public function rescheduleMasterReminder(

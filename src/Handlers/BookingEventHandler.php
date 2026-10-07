@@ -263,25 +263,33 @@ final readonly class BookingEventHandler
                     ]);
                 }
                 if ($resourceChanged) {
+                    if ($oldMaster === null) {
+                        $sideEffectErrors[] = 'уведомление прежнего мастера: Max ID не указан';
+                    } else {
+                        $this->runUpdateSideEffect(
+                            'уведомление прежнего мастера',
+                            fn() => $this->gateway->sendMaxMessage(
+                                $oldMaster,
+                                $this->oldMasterCancellationMessage($task, $oldSignature),
+                            ),
+                            $sideEffectErrors,
+                            $context,
+                        );
+                    }
+                }
+                if ($newMaster === null) {
+                    $sideEffectErrors[] = 'уведомление и напоминание актуального мастера: Max ID не указан';
+                } else {
                     $this->runUpdateSideEffect(
-                        'уведомление прежнего мастера',
+                        'уведомление актуального мастера',
                         fn() => $this->gateway->sendMaxMessage(
-                            $oldMaster,
-                            $this->oldMasterCancellationMessage($task, $oldSignature),
+                            $newMaster,
+                            $this->masterUpdateMessage($task, $booking, $newStation, $resourceChanged),
                         ),
                         $sideEffectErrors,
                         $context,
                     );
                 }
-                $this->runUpdateSideEffect(
-                    'уведомление актуального мастера',
-                    fn() => $this->gateway->sendMaxMessage(
-                        $newMaster,
-                        $this->masterUpdateMessage($task, $booking, $newStation, $resourceChanged),
-                    ),
-                    $sideEffectErrors,
-                    $context,
-                );
 
                 if ($client !== null && $clientContactId !== null && $clientVisibleChange) {
                     $this->runUpdateSideEffect(
@@ -296,18 +304,20 @@ final readonly class BookingEventHandler
                     );
                 }
 
-                $this->runUpdateSideEffect(
-                    'перепланирование напоминания мастеру',
-                    fn() => $this->gateway->rescheduleMasterReminder(
-                        $deal->dealId,
-                        $newMaster,
-                        $task->id,
-                        $booking,
-                        $this->masterReminderMessage($task),
-                    ),
-                    $sideEffectErrors,
-                    $context,
-                );
+                if ($newMaster !== null) {
+                    $this->runUpdateSideEffect(
+                        'перепланирование напоминания мастеру',
+                        fn() => $this->gateway->rescheduleMasterReminder(
+                            $deal->dealId,
+                            $newMaster,
+                            $task->id,
+                            $booking,
+                            $this->masterReminderMessage($task),
+                        ),
+                        $sideEffectErrors,
+                        $context,
+                    );
+                }
                 if ($clientVisibleChange) {
                     $this->runUpdateSideEffect(
                         'перепланирование напоминания клиенту',
@@ -540,6 +550,9 @@ final readonly class BookingEventHandler
                         $errors,
                         $context,
                     );
+                    if ($master === null) {
+                        $errors[] = 'уведомление мастера: Max ID не указан';
+                    }
                 }
                 if ($deal->contactId === null) {
                     $errors[] = 'уведомление клиента: основной контакт не найден';

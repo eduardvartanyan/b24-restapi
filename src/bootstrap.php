@@ -10,6 +10,7 @@ use App\Http\Controllers\TgController;
 use App\Booking\BookingAutomationConfig;
 use App\Contracts\BookingAutomationGateway;
 use App\Contracts\BookingResourceProvider;
+use App\Contracts\MaxMessageSender;
 use App\Repositories\ChatRequestRepository;
 use App\Repositories\ChatSourceRepository;
 use App\Repositories\ChatStateRepository;
@@ -21,6 +22,7 @@ use App\Services\Bitrix24BookingResourceProvider;
 use App\Services\DaDataService;
 use App\Services\DailyImportService;
 use App\Services\MaxService;
+use App\Services\MaxBotMessageSender;
 use App\Services\OneCService;
 use App\Services\ReviewService;
 use App\Services\TgService;
@@ -38,7 +40,7 @@ $container->set(BookingAutomationConfig::class, fn() => BookingAutomationConfig:
 $container->set(BookingAutomationGateway::class, fn() => new Bitrix24BookingAutomationGateway(
     $container->get(ServiceBuilder::class),
     $container->get(BookingAutomationConfig::class),
-    $container->get(MaxService::class),
+    $container->get(MaxMessageSender::class),
 ));
 $container->set(BookingEventHandler::class,      fn() => new BookingEventHandler(
     $container->get(BookingAutomationGateway::class),
@@ -52,6 +54,9 @@ $container->set(BookingResourceProvider::class, fn() => new Bitrix24BookingResou
 ));
 $container->set(BookingResourceController::class, fn() => new BookingResourceController(
     $container->get(BookingResourceProvider::class),
+));
+$container->set(MaxMessageSender::class,          fn() => new MaxBotMessageSender(
+    $_ENV['MAX_BOT_TOKEN_NOTICE'] ?? '',
 ));
 $container->set(B24Service::class,              fn() => new B24Service($container->get(ServiceBuilder::class)));
 $container->set(ReviewService::class,           fn() => new ReviewService(

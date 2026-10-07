@@ -41,7 +41,7 @@ interface BookingAutomationGateway
 
     public function getServiceStation(string $reference): ServiceStation;
 
-    public function getMasterRecipient(int $userId): MaxRecipient;
+    public function getMasterRecipient(int $userId): ?MaxRecipient;
 
     public function getClientRecipient(int $contactId): ?NotificationRecipient;
 
