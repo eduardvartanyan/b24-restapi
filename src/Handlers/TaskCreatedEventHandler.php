@@ -36,14 +36,17 @@ final readonly class TaskCreatedEventHandler
             'В событии отсутствует корректный ID задачи',
         );
         $task = $this->gateway->getTask($taskId);
-        $recipient = $this->gateway->getMaxRecipient($task->responsibleUserId);
-        if ($recipient === null) {
+        $recipient = $this->gateway->getNotificationRecipient($task->responsibleUserId);
+        if (!$recipient->extranet) {
+            return ['event' => $event, 'taskId' => $taskId, 'status' => 'skipped_not_extranet'];
+        }
+        if ($recipient->maxId === null) {
             return ['event' => $event, 'taskId' => $taskId, 'status' => 'skipped_no_max_id'];
         }
 
         $sent = $this->store->executeOnce(
             $taskId,
-            fn() => $this->sender->sendToUser($recipient->userId, $this->message($task)),
+            fn() => $this->sender->sendToUser($recipient->maxId, $this->message($task)),
         );
         $status = $sent ? 'sent' : 'duplicate';
         Logger::info('B24 task MAX notification handled', [

@@ -3,12 +3,12 @@ declare(strict_types=1);
 
 namespace App\Contracts;
 
-use App\Booking\MaxRecipient;
 use App\Task\CreatedTask;
+use App\Task\TaskNotificationRecipient;
 
 interface TaskNotificationGateway
 {
     public function getTask(int $taskId): CreatedTask;
 
-    public function getMaxRecipient(int $userId): ?MaxRecipient;
+    public function getNotificationRecipient(int $userId): TaskNotificationRecipient;
 }

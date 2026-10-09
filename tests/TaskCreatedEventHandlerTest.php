@@ -1,7 +1,6 @@
 <?php
 declare(strict_types=1);
 
-use App\Booking\MaxRecipient;
 use App\Contracts\MaxMessageSender;
 use App\Contracts\TaskNotificationGateway;
 use App\Contracts\TaskNotificationStore;
@@ -9,12 +8,18 @@ use App\Handlers\TaskCreatedEventHandler;
 use App\Repositories\FileTaskNotificationStore;
 use App\Task\CreatedTask;
 use App\Task\TaskNotificationConfig;
+use App\Task\TaskNotificationRecipient;
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
 final class FakeTaskNotificationGateway implements TaskNotificationGateway
 {
-    public ?MaxRecipient $recipient = null;
+    public TaskNotificationRecipient $recipient;
+
+    public function __construct()
+    {
+        $this->recipient = new TaskNotificationRecipient(610, true, null, 'Петр Петров');
+    }
 
     public function getTask(int $taskId): CreatedTask
     {
@@ -27,7 +32,7 @@ final class FakeTaskNotificationGateway implements TaskNotificationGateway
         );
     }
 
-    public function getMaxRecipient(int $userId): ?MaxRecipient
+    public function getNotificationRecipient(int $userId): TaskNotificationRecipient
     {
         return $this->recipient;
     }
@@ -82,9 +87,9 @@ function assertTaskSame(mixed $expected, mixed $actual, string $message): void
 
 $tests = [];
 
-$tests['sends task notification to responsible employee'] = static function (): void {
+$tests['sends task notification to responsible extranet user'] = static function (): void {
     $gateway = new FakeTaskNotificationGateway();
-    $gateway->recipient = new MaxRecipient(381250, 'Петр Петров');
+    $gateway->recipient = new TaskNotificationRecipient(610, true, 381250, 'Петр Петров');
     $store = new FakeTaskNotificationStore();
     $sender = new FakeMaxMessageSender();
     $handler = new TaskCreatedEventHandler(
@@ -121,9 +126,23 @@ $tests['skips employee without Max ID'] = static function (): void {
     assertTaskSame([], $store->sent, 'Skipped notification was marked as sent');
 };
 
+$tests['skips non-extranet employee with Max ID'] = static function (): void {
+    $gateway = new FakeTaskNotificationGateway();
+    $gateway->recipient = new TaskNotificationRecipient(610, false, 381250, 'Петр Петров');
+    $store = new FakeTaskNotificationStore();
+    $sender = new FakeMaxMessageSender();
+    $handler = new TaskCreatedEventHandler($gateway, $store, $sender, new TaskNotificationConfig());
+
+    $result = $handler->handle(taskPayload(123));
+
+    assertTaskSame('skipped_not_extranet', $result['status'], 'Internal employee was not skipped');
+    assertTaskSame([], $sender->messages, 'Message was sent to an internal employee');
+    assertTaskSame([], $store->sent, 'Skipped internal employee notification was marked as sent');
+};
+
 $tests['does not send duplicate event twice'] = static function (): void {
     $gateway = new FakeTaskNotificationGateway();
-    $gateway->recipient = new MaxRecipient(381250, 'Петр Петров');
+    $gateway->recipient = new TaskNotificationRecipient(610, true, 381250, 'Петр Петров');
     $store = new FakeTaskNotificationStore();
     $sender = new FakeMaxMessageSender();
     $handler = new TaskCreatedEventHandler($gateway, $store, $sender, new TaskNotificationConfig());
@@ -137,7 +156,7 @@ $tests['does not send duplicate event twice'] = static function (): void {
 
 $tests['does not mark failed MAX message as sent'] = static function (): void {
     $gateway = new FakeTaskNotificationGateway();
-    $gateway->recipient = new MaxRecipient(381250, 'Петр Петров');
+    $gateway->recipient = new TaskNotificationRecipient(610, true, 381250, 'Петр Петров');
     $store = new FakeTaskNotificationStore();
     $sender = new FakeMaxMessageSender();
     $sender->fail = true;

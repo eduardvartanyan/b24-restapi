@@ -3,11 +3,11 @@ declare(strict_types=1);
 
 namespace App\Services;
 
-use App\Booking\MaxRecipient;
 use App\Contracts\TaskNotificationGateway;
 use App\Helpers\Logger;
 use App\Task\CreatedTask;
 use App\Task\TaskNotificationConfig;
+use App\Task\TaskNotificationRecipient;
 use Bitrix24\SDK\Services\ServiceBuilder;
 use DateTimeImmutable;
 use RuntimeException;
@@ -55,7 +55,7 @@ final readonly class Bitrix24TaskNotificationGateway implements TaskNotification
         );
     }
 
-    public function getMaxRecipient(int $userId): ?MaxRecipient
+    public function getNotificationRecipient(int $userId): TaskNotificationRecipient
     {
         $user = $this->getUser($userId);
         $maxId = filter_var(
@@ -63,15 +63,25 @@ final readonly class Bitrix24TaskNotificationGateway implements TaskNotification
             FILTER_VALIDATE_INT,
             ['options' => ['min_range' => 1]],
         );
-        if ($maxId === false) {
+        $extranet = strtolower(trim((string) ($user['USER_TYPE'] ?? ''))) === 'extranet';
+        if (!$extranet) {
+            Logger::info('B24 task MAX notification skipped for non-extranet user', [
+                'user_id' => $userId,
+                'user_type' => $user['USER_TYPE'] ?? null,
+            ]);
+        } elseif ($maxId === false) {
             Logger::info('B24 task MAX notification skipped because Max ID is missing', [
                 'user_id' => $userId,
                 'field' => $this->config->maxIdField,
             ]);
-            return null;
         }
 
-        return new MaxRecipient((int) $maxId, $this->userName($user, $userId));
+        return new TaskNotificationRecipient(
+            bitrixUserId: $userId,
+            extranet: $extranet,
+            maxId: $maxId === false ? null : (int) $maxId,
+            name: $this->userName($user, $userId),
+        );
     }
 
     private function getUserName(int $userId): string
