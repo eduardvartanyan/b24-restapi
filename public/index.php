@@ -8,6 +8,7 @@ use App\Http\Controllers\ImportController;
 use App\Http\Controllers\MaxController;
 use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\TgController;
+use App\Http\Controllers\TaskEventController;
 use App\Http\Middleware;
 use App\Services\B24Service;
 use App\Support\Container;
@@ -67,6 +68,14 @@ try {
         case '/api/b24/booking/resources':
             $bookingResourceController = $container->get(BookingResourceController::class);
             $bookingResourceController->handle();
+            break;
+
+        case '/api/b24/task/events':
+            if ($method === 'POST') {
+                Middleware::check();
+            }
+            $taskEventController = $container->get(TaskEventController::class);
+            $taskEventController->handle();
             break;
 
         case '/api/b24/contacts/import-birthdate':

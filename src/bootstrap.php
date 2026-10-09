@@ -7,15 +7,20 @@ use App\Http\Controllers\BookingResourceController;
 use App\Http\Controllers\MaxController;
 use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\TgController;
+use App\Http\Controllers\TaskEventController;
 use App\Booking\BookingAutomationConfig;
 use App\Contracts\BookingAutomationGateway;
 use App\Contracts\BookingResourceProvider;
 use App\Contracts\MaxMessageSender;
+use App\Contracts\TaskNotificationGateway;
+use App\Contracts\TaskNotificationStore;
 use App\Repositories\ChatRequestRepository;
 use App\Repositories\ChatSourceRepository;
 use App\Repositories\ChatStateRepository;
 use App\Repositories\ClickRepository;
+use App\Repositories\FileTaskNotificationStore;
 use App\Handlers\BookingEventHandler;
+use App\Handlers\TaskCreatedEventHandler;
 use App\Services\B24Service;
 use App\Services\Bitrix24BookingAutomationGateway;
 use App\Services\Bitrix24BookingResourceProvider;
@@ -23,11 +28,13 @@ use App\Services\DaDataService;
 use App\Services\DailyImportService;
 use App\Services\MaxService;
 use App\Services\MaxBotMessageSender;
+use App\Services\Bitrix24TaskNotificationGateway;
 use App\Services\OneCService;
 use App\Services\ReviewService;
 use App\Services\TgService;
 use App\Support\Container;
 use App\Support\MessageCatalog;
+use App\Task\TaskNotificationConfig;
 use Bitrix24\SDK\Services\ServiceBuilder;
 use Bitrix24\SDK\Services\ServiceBuilderFactory;
 use Dotenv\Dotenv;
@@ -57,6 +64,23 @@ $container->set(BookingResourceController::class, fn() => new BookingResourceCon
 ));
 $container->set(MaxMessageSender::class,          fn() => new MaxBotMessageSender(
     $_ENV['MAX_BOT_TOKEN_NOTICE'] ?? '',
+));
+$container->set(TaskNotificationConfig::class, fn() => TaskNotificationConfig::fromEnvironment($_ENV));
+$container->set(TaskNotificationGateway::class, fn() => new Bitrix24TaskNotificationGateway(
+    $container->get(ServiceBuilder::class),
+    $container->get(TaskNotificationConfig::class),
+));
+$container->set(TaskNotificationStore::class, fn() => new FileTaskNotificationStore(
+    $_ENV['B24_TASK_NOTIFICATION_STORE'] ?? __DIR__ . '/../storage/task-notifications',
+));
+$container->set(TaskCreatedEventHandler::class, fn() => new TaskCreatedEventHandler(
+    $container->get(TaskNotificationGateway::class),
+    $container->get(TaskNotificationStore::class),
+    $container->get(MaxMessageSender::class),
+    $container->get(TaskNotificationConfig::class),
+));
+$container->set(TaskEventController::class, fn() => new TaskEventController(
+    $container->get(TaskCreatedEventHandler::class),
 ));
 $container->set(B24Service::class,              fn() => new B24Service($container->get(ServiceBuilder::class)));
 $container->set(ReviewService::class,           fn() => new ReviewService(
