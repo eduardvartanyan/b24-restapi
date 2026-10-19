@@ -69,7 +69,7 @@ readonly class MaxController
         }
     }
 
-    public function handleB24MessageWebhook(): void
+    public function handleB24MessageWebhook(bool $registerInContact = false): void
     {
         $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
@@ -108,12 +108,16 @@ readonly class MaxController
             'user_id' => $userId,
         ]);
 
-        $result = $this->maxService->sendMessage(
-            message: (string)$message,
-            chatId: $chatId,
-            userId: $userId
-        );
-        $this->jsonResponse($result['status'], ['message' => $result['body']]);
+        $result = $registerInContact
+            ? $this->maxService->sendB24Message((string) $message, $chatId, $userId)
+            : $this->maxService->sendMessage((string) $message, $chatId, $userId);
+        $body = ['message' => $result['body']];
+        foreach (['timeline_recorded', 'contact_id'] as $key) {
+            if (array_key_exists($key, $result)) {
+                $body[$key] = $result[$key];
+            }
+        }
+        $this->jsonResponse($result['status'], $body);
     }
 
     private function jsonResponse(int $status, array $body): void

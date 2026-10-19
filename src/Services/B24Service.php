@@ -368,6 +368,41 @@ class B24Service
         return null;
     }
 
+    public function registerSentMaxMessage(string $message, int|string|null $chatId, int|string|null $userId): int
+    {
+        $filter = $chatId !== null && trim((string) $chatId) !== ''
+            ? ['=UF_CRM_1773132631' => trim((string) $chatId)]
+            : ['=UF_CRM_MAXID_WZ' => trim((string) $userId)];
+
+        $contacts = $this->b24->core->call('crm.contact.list', [
+            'filter' => $filter,
+            'select' => ['ID'],
+        ])->getResponseData()->getResult();
+
+        if (count($contacts) !== 1) {
+            throw new \RuntimeException(sprintf(
+                'Для получателя MAX найдено контактов: %d; требуется один связанный контакт',
+                count($contacts)
+            ));
+        }
+
+        $contactId = (int) $contacts[0]['ID'];
+        $commentResult = $this->b24->core->call('crm.timeline.comment.add', [
+            'fields' => [
+                'ENTITY_ID' => $contactId,
+                'ENTITY_TYPE' => 'contact',
+                'COMMENT' => "Отправлено сообщение в MAX:\n\n" . $message,
+            ],
+        ])->getResponseData()->getResult();
+
+        // The SDK wraps scalar REST results into an array.
+        if ((int) ($commentResult[0] ?? 0) <= 0) {
+            throw new \RuntimeException('Битрикс24 не подтвердил добавление комментария в контакт');
+        }
+
+        return $contactId;
+    }
+
     public function getContactIdByPhone(string $phone): ?int
     {
         $phoneVariants = [

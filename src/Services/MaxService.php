@@ -1085,6 +1085,50 @@ readonly class MaxService
         }
     }
 
+    public function sendB24Message(
+        string $message,
+        int|string|null $chatId = null,
+        int|string|null $userId = null
+    ): array
+    {
+        $message = trim($message);
+        $result = $this->sendMessage($message, $chatId, $userId);
+
+        if ($result['status'] !== 200) {
+            return $result;
+        }
+
+        try {
+            $contactId = $this->b24->registerSentMaxMessage($message, $chatId, $userId);
+            Logger::info('B24 Max message webhook: contact timeline comment added', [
+                'contact_id' => $contactId,
+                'chat_id' => $chatId,
+                'user_id' => $userId,
+            ]);
+
+            return $result + ['timeline_recorded' => true, 'contact_id' => $contactId];
+        } catch (Throwable $e) {
+            Logger::error('B24 Max message webhook: sent message timeline registration failed', [
+                'chat_id' => $chatId,
+                'user_id' => $userId,
+                'sent_message' => $message,
+                'message' => $e->getMessage(),
+            ]);
+            $this->notifyFatalError('B24 contact timeline', $e, [
+                'update_type' => 'register_sent_max_message',
+                'chat_id' => $chatId,
+                'user_id' => $userId,
+            ]);
+
+            // The message was already sent; a 500 response could trigger a duplicate delivery.
+            return [
+                'status' => 200,
+                'body' => 'Message sent, but contact timeline registration failed',
+                'timeline_recorded' => false,
+            ];
+        }
+    }
+
     public function sendMessage(
         string $message,
         int|string|null $chatId = null,

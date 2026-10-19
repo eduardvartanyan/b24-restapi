@@ -91,7 +91,7 @@ try {
                 Middleware::check();
             }
             $maxController = $container->get('max.controller.client');
-            $maxController->handleB24MessageWebhook();
+            $maxController->handleB24MessageWebhook(registerInContact: true);
             break;
 
         case '/api/b24/max/send-notice':
