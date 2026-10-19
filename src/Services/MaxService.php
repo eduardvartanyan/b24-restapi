@@ -226,7 +226,13 @@ readonly class MaxService
                     }
 
                     elseif ($chatState == 'status.waiting_contact') {
-                        return Bot::sendMessage($this->b24->getDealsReportByContactId($contact['id']));
+                        Bot::sendMessage($this->b24->getDealsReportByContactId($contact['id']));
+                        $this->chatStateRepository->clearState($chatId);
+
+                        sleep(1);
+                        return Bot::sendMessage($this->messages->get('message__menu'), [
+                            'attachments' => [$this->getMenu()],
+                        ]);
                     }
 
                     elseif ($chatState == 'ask.waiting_contact') {
@@ -767,7 +773,15 @@ readonly class MaxService
                     ],
                 ];
             }
-            return Bot::answerOnCallback($update['callback']['callback_id'], $data);
+            $result = Bot::answerOnCallback($update['callback']['callback_id'], $data);
+            if ($contactId) {
+                sleep(1);
+                Bot::sendMessageToChat($chatId, $this->messages->get('message__menu'), [
+                    'attachments' => [$this->getMenu()],
+                ]);
+            }
+
+            return $result;
         });
 
         $this->maxBot->action('ask__start', function() {

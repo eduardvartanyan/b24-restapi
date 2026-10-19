@@ -228,6 +228,10 @@ class B24Service
                 'emoji' => '👀 ',
                 'text' => 'Ожидаем документы из ГАИ'
             ],
+            'C14:WON' => [
+                'emoji' => '✅ ',
+                'text' => 'Заявка обработана, материалы поступили'
+            ],
         ];
 
         try {
@@ -264,6 +268,17 @@ class B24Service
     {
         $dealsById = [];
         foreach ($this->b24->getCRMScope()->deal()->batch->list([], $this->getAccidentDealFilters(), $select) as $deal) {
+            $dealsById[$deal->ID] = $deal;
+        }
+
+        $today = new DateTimeImmutable('today', new \DateTimeZone('Asia/Irkutsk'));
+        $completedFilters = [
+            'CATEGORY_ID' => ['14'],
+            'STAGE_ID' => 'C14:WON',
+            '>=CLOSEDATE' => $today->modify('-10 days')->format('Y-m-d'),
+            '<CLOSEDATE' => $today->modify('+1 day')->format('Y-m-d'),
+        ];
+        foreach ($this->b24->getCRMScope()->deal()->batch->list([], $completedFilters, $select) as $deal) {
             $dealsById[$deal->ID] = $deal;
         }
 
